@@ -101,8 +101,9 @@ RUN groupadd --gid 1000 abdm \
 RUN mkdir -p /config /downloads /app \
  && chown -R abdm:abdm /config /downloads /app
 
-# The fat jar and nothing else from the builder stage.
-COPY --from=builder /build/server/app/build/libs/abdm-server-0.1.0-all.jar /app/abdm-server.jar
+# The fat jar and nothing else from the builder stage. The wildcard keeps this line
+# independent of the version, so bumping the project version never breaks the image.
+COPY --from=builder /build/server/app/build/libs/abdm-server-*-all.jar /app/abdm-server.jar
 
 # The built frontend, served from ABDM_WEB_DIR.
 COPY --from=web /web/dist /app/web

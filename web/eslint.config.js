@@ -95,7 +95,12 @@ export default tseslint.config(
   {
     files: ['**/*.{ts,vue}'],
     languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        // Injected by vite.config.ts (see env.d.ts); not a real browser global.
+        __APP_VERSION__: 'readonly',
+      },
     },
     rules: sharedRules,
   },

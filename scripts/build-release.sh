@@ -20,8 +20,7 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 
 DIST="${REPO_ROOT}/dist"
-APP_JAR_NAME="abdm-server-0.1.0-all.jar"
-APP_JAR_PATH="server/app/build/libs/${APP_JAR_NAME}"
+
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -31,8 +30,13 @@ VERSION="${1:-}"
 if [ -z "${VERSION}" ]; then
   VERSION="$(sed -n -E 's/^project[[:space:]]*=[[:space:]]*"(.*)"/\1/p' gradle/libs.versions.toml | head -n1)"
 fi
+VERSION="${VERSION#v}"
 [ -n "${VERSION}" ] || die "could not determine the version (pass it explicitly)"
 printf 'building abdm-server %s\n' "${VERSION}"
+
+# Derived from the version, so bumping the version in one place is enough.
+APP_JAR_NAME="abdm-server-${VERSION}-all.jar"
+APP_JAR_PATH="server/app/build/libs/${APP_JAR_NAME}"
 
 # --- 1. frontend -------------------------------------------------------------
 step "frontend: npm ci"
@@ -47,7 +51,7 @@ step "frontend: npm run build"
 
 # --- 2. backend --------------------------------------------------------------
 step "backend: :server:app:shadowJar"
-./gradlew --no-daemon -Pabdm.enabled=false :server:app:shadowJar
+./gradlew --no-daemon -Pabdm.enabled=false -Pproject.version="${VERSION}" :server:app:shadowJar
 
 [ -f "${APP_JAR_PATH}" ] || die "fat jar not found at ${APP_JAR_PATH}"
 

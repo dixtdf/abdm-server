@@ -117,7 +117,7 @@ Build the single fat jar and run it directly:
 
 ```bash
 ./gradlew :server:app:shadowJar
-java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
+java -jar server/app/build/libs/abdm-server-*-all.jar
 ```
 
 When running locally you can relocate the directories with environment variables:
@@ -304,7 +304,7 @@ node scripts/test-http-server.mjs ./big.bin 9100 --throttle 262144
 
 # 2) start the service (port 6868 by default)
 ./gradlew :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
+java -jar server/app/build/libs/abdm-server-*-all.jar
 
 # 3) run the full acceptance suite (Windows PowerShell; it starts its own servers)
 powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb 256
@@ -369,7 +369,19 @@ To reproduce the version stamping locally:
 
 ```bash
 ./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-0.2.0-all.jar --print-version   # -> 0.2.0
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 0.2.0
+```
+
+Bump the version (one command updates the Gradle catalog, the frontend
+`package.json`/`package-lock.json`, the server and engine fallbacks and both
+READMEs; everything else derives from those):
+
+```powershell
+# show what would change, write nothing
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 0.2.0 -DryRun
+
+# apply, optionally commit / tag / push
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v0.2.0 -Commit -Tag
 ```
 
 ---

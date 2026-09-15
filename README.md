@@ -109,7 +109,7 @@ npm run dev
 
 ```bash
 ./gradlew :server:app:shadowJar
-java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
+java -jar server/app/build/libs/abdm-server-*-all.jar
 ```
 
 本地跑的时候可用环境变量覆盖目录，例如：
@@ -282,7 +282,7 @@ node scripts/test-http-server.mjs ./big.bin 9100 --throttle 262144
 
 # 2) 起服务（默认端口 6868，或按需指定）
 ./gradlew :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
+java -jar server/app/build/libs/abdm-server-*-all.jar
 
 # 3) 一键跑完整验收（Windows PowerShell；脚本自己起文件服务器与 jar）
 powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb 256
@@ -343,7 +343,18 @@ tag: v0.2.0（打在 ref 指向的提交上）
 
 ```bash
 ./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-0.2.0-all.jar --print-version   # -> 0.2.0
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 0.2.0
+```
+
+改动版本号（一次改完 Gradle 版本目录、前端 `package.json`/`package-lock.json`、
+服务端与引擎的回退版本、两个 README；其余地方都从这些地方派生）：
+
+```powershell
+# 先看要改什么，不写文件
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 0.2.0 -DryRun
+
+# 真改，并可选提交/打 tag/推送
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v0.2.0 -Commit -Tag
 ```
 
 ---

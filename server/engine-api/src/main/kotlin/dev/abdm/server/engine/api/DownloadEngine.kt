@@ -2,6 +2,19 @@ package dev.abdm.server.engine.api
 
 import kotlinx.coroutines.flow.SharedFlow
 
+/**
+ * Version reported by an engine that does not override `descriptor`.
+ *
+ * The jar manifest wins (a release jar therefore reports the version it was released
+ * as, exactly like the server does); the literal is only a fallback for tests and
+ * IDE runs, and `scripts/set-version.ps1` keeps it in step with the project version.
+ */
+val ENGINE_API_FALLBACK_VERSION: String =
+    dev.abdm.server.engine.api.DownloadEngine::class.java.`package`
+        ?.implementationVersion
+        ?.takeIf { it.isNotBlank() }
+        ?: "0.1.0"
+
 /** Optional behaviours an engine implementation may or may not support. */
 enum class EngineCapability {
     HTTP_RANGE,
@@ -29,7 +42,7 @@ interface DownloadEngine {
 
     /** Who performs the download, surfaced by `GET /api/v1/version`. */
     val descriptor: EngineDescriptor
-        get() = EngineDescriptor(name = name, version = "0.1.0", capabilities = capabilities)
+        get() = EngineDescriptor(name = name, version = ENGINE_API_FALLBACK_VERSION, capabilities = capabilities)
 
     /** @return the new task id. */
     suspend fun create(request: CreateDownloadRequest): String

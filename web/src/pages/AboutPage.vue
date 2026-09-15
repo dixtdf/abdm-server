@@ -13,8 +13,8 @@ import type { VersionResponse } from '../api/types'
 const { t } = useI18n()
 const fmt = useFormat()
 
-/** Mirrors `package.json`; shown as the web UI version. */
-const WEB_UI_VERSION = '0.1.0'
+/** Injected by vite.config.ts from `web/package.json` (see `__APP_VERSION__` in env.d.ts). */
+const WEB_UI_VERSION = __APP_VERSION__
 
 const version = ref<VersionResponse | null>(null)
 const loading = ref(false)
