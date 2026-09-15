@@ -7,6 +7,7 @@ and a bundled web UI. It is built for LAN-first deployments, uses the built-in s
 download engine by default, and can switch to AB Download Manager as its backend engine.
 
 - Version: `0.1.0`
+- Repository: <https://github.com/dixtdf/abdm-server>
 - License: [Apache-2.0](LICENSE)
 - Upstream engine: [AB Download Manager](https://github.com/amir1376/ab-download-manager)
   `v1.10.4` (git submodule, pinned commit — see [docs/upstream.md](docs/upstream.md))
@@ -53,8 +54,8 @@ Every string comes from `web/src/locales/*.json`, so you can preview it locally 
 1. Create `.env` in the repository root:
 
    ```dotenv
-   IMAGE_OWNER=<your GitHub account or org>
-   IMAGE_TAG=latest          # or edge / v0.1.0
+   IMAGE_OWNER=dixtdf        # or your own fork
+   IMAGE_TAG=latest          # or edge / 0.1.0
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # or token
    AUTH_TOKEN=               # required when AUTH_MODE=token
@@ -279,8 +280,10 @@ curl -fsS http://127.0.0.1:8080/api/v1/health
 ```
 
 CI workflows: `.github/workflows/ci.yml` (backend / frontend / docker / abdm-compat),
-`docker.yml` (multi-arch image push), `release.yml` (release on tag),
-`upstream-check.yml` (weekly upstream check that opens a PR) and `codeql.yml`.
+`docker.yml` (publishes `:edge` on every push to main and the release images on tags),
+`release-manual.yml` (manual release with a version input, see "Releasing"),
+`release.yml` (release when a tag is pushed), `upstream-check.yml` (weekly upstream check
+that opens a PR) and `codeql.yml`.
 
 ### Local end-to-end acceptance
 
@@ -306,6 +309,62 @@ approach in-process (with its own Range server); its
 `a restart resumes from the sqlite checkpoint instead of starting over` test is the
 regression test for "resume after restart", and `AbdmCompatibilityTest` runs the same
 scenarios against the real ABDM engine.
+
+---
+
+## Releasing
+
+Releases are cut by a **manual GitHub Actions workflow**
+(`.github/workflows/release-manual.yml`): type a version, and it tags the chosen ref
+(`main` by default), publishes the image to GHCR and attaches the binaries to a GitHub
+Release.
+
+1. Actions → **Release (manual)** → Run workflow
+2. Fill in the inputs:
+
+| Input | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `version` | yes | – | Semantic version such as `0.2.0` (a leading `v` is accepted) |
+| `ref` | yes | `main` | Branch, tag or commit to build and tag |
+| `prerelease` | no | `false` | Mark the GitHub Release as a pre-release |
+| `push_latest` | no | `true` | Also move the `:latest` image tag |
+| `dry_run` | no | `false` | Verify and build only: no image push, no tag, no release |
+
+3. The job then: validates the version and refuses an existing tag → checks out `ref`
+   (with submodules) → runs the backend `build` and the frontend gates
+   (`i18n:check / lint / typecheck / test`) → builds the fat jar with the version baked in
+   (`-Pproject.version=`, re-checked with `java -jar server.jar --print-version`) → writes
+   `SHA256SUMS` → pushes the multi-arch image (`linux/amd64` + `linux/arm64`) → creates the
+   tag → creates the GitHub Release with `server.jar`, `docker-compose.yml` and
+   `SHA256SUMS` attached.
+
+Produced artifacts:
+
+```text
+ghcr.io/dixtdf/abdm-server:0.2.0     # version
+ghcr.io/dixtdf/abdm-server:0.2       # major.minor
+ghcr.io/dixtdf/abdm-server:latest    # when push_latest=true
+ghcr.io/dixtdf/abdm-server:edge      # every push to main (docker.yml)
+tag: v0.2.0 (on the commit ref points at)
+```
+
+Two notes:
+
+1. The tag is created **last**, so a failed verification or image build never leaves a tag
+   behind.
+2. A tag pushed with `GITHUB_TOKEN` does not trigger other workflows, which is why this
+   workflow also creates the release itself. Tagging by hand stays equivalent:
+
+   ```bash
+   git tag v0.2.0 && git push origin v0.2.0   # triggers release.yml
+   ```
+
+To reproduce the version stamping locally:
+
+```bash
+./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-0.2.0-all.jar --print-version   # -> 0.2.0
+```
 
 ---
 

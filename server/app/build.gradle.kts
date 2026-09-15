@@ -78,9 +78,15 @@ tasks.named("build") {
 }
 
 // One naming scheme everywhere: abdm-server-<version>.jar / abdm-server-<version>-all.jar
-// (the Dockerfile, the release workflow and the README all refer to that name).
+// (the Dockerfile, the release workflows and the README all refer to that name).
 tasks.withType<Jar>().configureEach {
     archiveBaseName.set("abdm-server")
+    manifest {
+        attributes(
+            "Implementation-Title" to "abdm-server",
+            "Implementation-Version" to project.version.toString(),
+        )
+    }
 }
 
 // CI/README alias: some docs refer to `:server:app:shadowJar`.

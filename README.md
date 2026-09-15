@@ -7,6 +7,7 @@
 AB Download Manager 作为后端引擎。
 
 - 版本：`0.1.0`
+- 仓库：<https://github.com/dixtdf/abdm-server>
 - 许可证：[Apache-2.0](LICENSE)
 - 上游引擎：[AB Download Manager](https://github.com/amir1376/ab-download-manager)
   `v1.10.4`（子模块，固定 commit，见 [docs/upstream.md](docs/upstream.md)）
@@ -47,8 +48,8 @@ AB Download Manager 作为后端引擎。
 1. 在仓库根目录创建 `.env`：
 
    ```dotenv
-   IMAGE_OWNER=<你的 GitHub 账号或组织>
-   IMAGE_TAG=latest          # 或 edge / v0.1.0
+   IMAGE_OWNER=dixtdf        # 或你自己的 fork
+   IMAGE_TAG=latest          # 或 edge / 0.1.0
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # 或 token
    AUTH_TOKEN=               # AUTH_MODE=token 时填写
@@ -259,8 +260,9 @@ curl -fsS http://127.0.0.1:8080/api/v1/health
 ```
 
 CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker / abdm-compat）、
-`docker.yml`（多架构镜像推送）、`release.yml`（tag 触发发布）、
-`upstream-check.yml`（每周检查上游并开 PR）、`codeql.yml`。
+`docker.yml`（每次推送 main 发布 `:edge`，tag 发布正式镜像）、
+`release-manual.yml`（手动输入版本号发版，见「发布」章节）、
+`release.yml`（推送 tag 时发版）、`upstream-check.yml`（每周检查上游并开 PR）、`codeql.yml`。
 
 ### 本地验收（端到端）
 
@@ -286,6 +288,57 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 单元测试侧，`server/engine-native` 里的 `NativeDownloadEngineTest` 用同一个思路在进程内跑
 （自带 Range 服务器），其中 `a restart resumes from the sqlite checkpoint instead of starting over`
 就是“重启后续传”的回归测试；`AbdmCompatibilityTest` 则用真实 ABDM 引擎跑同一组场景。
+
+---
+
+## 发布 Releasing
+
+发布走 GitHub Actions 的**手动流程**（`.github/workflows/release-manual.yml`）：
+输入版本号即可，默认对 `main` 打 tag，并同时推镜像到 GHCR、把二进制传到 Release。
+
+1. Actions → **Release (manual)** → Run workflow
+2. 填写输入：
+
+| 输入 | 必填 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `version` | 是 | – | 语义化版本，如 `0.2.0`（允许写成 `v0.2.0`） |
+| `ref` | 是 | `main` | 要构建并打 tag 的分支 / tag / commit |
+| `prerelease` | 否 | `false` | 标记为预发布 |
+| `push_latest` | 否 | `true` | 是否同时移动 `:latest` 镜像标签 |
+| `dry_run` | 否 | `false` | 只验证与构建，不推镜像、不打 tag、不发 Release |
+
+3. 流程依次执行：校验版本与重名 tag → checkout `ref`（含子模块）→ 后端 `build`、
+   前端 `i18n:check / lint / typecheck / test` → 构建带版本号的 fat jar（`-Pproject.version=`，
+   并用 `java -jar server.jar --print-version` 复核）→ 生成 `SHA256SUMS` →
+   推送多架构镜像（`linux/amd64` + `linux/arm64`）→ 打 tag → 创建 Release
+   （附件 `server.jar`、`docker-compose.yml`、`SHA256SUMS`）。
+
+产物：
+
+```text
+ghcr.io/dixtdf/abdm-server:0.2.0     # 版本
+ghcr.io/dixtdf/abdm-server:0.2       # major.minor
+ghcr.io/dixtdf/abdm-server:latest    # push_latest=true 时
+ghcr.io/dixtdf/abdm-server:edge      # 每次推送 main 自动发布（docker.yml）
+tag: v0.2.0（打在 ref 指向的提交上）
+```
+
+两点说明：
+
+1. tag 是**最后一步**创建的——验证或镜像构建失败不会留下半成品 tag。
+2. 由 `GITHUB_TOKEN` 推送的 tag 不会触发其他 workflow，所以 Release 由本流程自己创建。
+   如果你更习惯手动打 tag，效果等价：
+
+   ```bash
+   git tag v0.2.0 && git push origin v0.2.0   # 触发 release.yml
+   ```
+
+本地自检可用与环境无关的方式复核版本号确实进了产物：
+
+```bash
+./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-0.2.0-all.jar --print-version   # -> 0.2.0
+```
 
 ---
 

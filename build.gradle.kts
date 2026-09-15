@@ -8,12 +8,15 @@ plugins {
 }
 
 // Single source of truth for the project version: gradle/libs.versions.toml
-val projectVersion: String = extensions
-    .getByType(VersionCatalogsExtension::class.java)
-    .named("libs")
-    .findVersion("project")
-    .get()
-    .requiredVersion
+// `-Pproject.version=X.Y.Z` overrides it (used by the manual release workflow so the
+// jar name, the manifest and the API report the released version).
+val projectVersion: String = providers.gradleProperty("project.version").orNull
+    ?: extensions
+        .getByType(VersionCatalogsExtension::class.java)
+        .named("libs")
+        .findVersion("project")
+        .get()
+        .requiredVersion
 
 // ---------------------------------------------------------------------------
 // Language level follows the engine.

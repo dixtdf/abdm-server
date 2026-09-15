@@ -1,0 +1,296 @@
+name: Release (manual)
+
+# Manual release: type a version, pick the ref to build (default: main) and this
+# workflow verifies the commit, tags it, publishes the multi-arch image to GHCR
+# and creates the GitHub Release with the binaries attached.
+#
+#   Actions -> Release (manual) -> Run workflow
+#     version      0.2.0            (the git tag becomes v0.2.0)
+#     ref          main             (branch, tag or commit to build)
+#     prerelease   false
+#     push_latest  true
+#     dry_run      false            (true = verify and build only)
+#
+# The tag is created last: a failed verification or image build leaves no tag
+# behind. Tags created here are pushed with GITHUB_TOKEN, which does not trigger
+# other workflows - this workflow therefore also creates the release itself.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 0.2.0 (a leading v is allowed)'
+        required: true
+        type: string
+      ref:
+        description: 'Branch, tag or commit to build and tag'
+        required: true
+        default: main
+        type: string
+      prerelease:
+        description: 'Mark the GitHub Release as a pre-release'
+        required: false
+        default: false
+        type: boolean
+      push_latest:
+        description: 'Also move the :latest image tag'
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: 'Verify and build only: no tag, no image push, no release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-manual
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+jobs:
+  release:
+    name: Release ${{ inputs.version }} from ${{ inputs.ref }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Normalize and validate the version input
+        id: release
+        run: |
+          set -euo pipefail
+          raw="${{ inputs.version }}"
+          version="${raw#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$raw' is not a semantic version (expected something like 0.2.0 or 0.2.0-rc.1)"
+            exit 1
+          fi
+          core="${version%%-*}"
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "major_minor=${core%.*}"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=$version -> tag v$version (image tags: $version, ${core%.*})" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse to overwrite an existing tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/git/ref/tags/$tag")
+          case "$status" in
+            404) echo "tag $tag is free" ;;
+            200) echo "::error::tag $tag already exists - pick a new version"; exit 1 ;;
+            *)   echo "::error::could not check tag $tag (HTTP $status)"; exit 1 ;;
+          esac
+
+      - name: Checkout ${{ inputs.ref }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Show what is being released
+        run: |
+          set -euo pipefail
+          echo "commit : $(git rev-parse HEAD)"
+          echo "subject: $(git log -1 --pretty=%s)"
+          echo "ref    : ${{ inputs.ref }}"
+          echo "abdm   : $(git submodule status third_party/ab-download-manager)"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # --- verification ------------------------------------------------------
+      - name: Backend build and tests
+        run: ./gradlew --no-daemon build -Pabdm.enabled=false
+
+      - name: Frontend install
+        working-directory: web
+        run: npm ci
+
+      - name: Frontend gates (i18n, lint, types, tests)
+        working-directory: web
+        run: |
+          set -euo pipefail
+          npm run i18n:check
+          npm run lint
+          npm run typecheck
+          npm run test
+
+      # --- artifacts ---------------------------------------------------------
+      - name: Build frontend and fat jar for ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          ( cd web && npm run build )
+          ./gradlew --no-daemon -Pabdm.enabled=false -Pproject.version="${{ steps.release.outputs.version }}" :server:app:fatJar
+          ls -l server/app/build/libs
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          version="${{ steps.release.outputs.version }}"
+          jar="server/app/build/libs/abdm-server-${version}-all.jar"
+          if [ ! -f "$jar" ]; then
+            echo "::error::expected $jar - did the version override reach Gradle?"
+            ls -l server/app/build/libs
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$jar" dist/server.jar
+          cp docker-compose.yml dist/docker-compose.yml
+          ( cd dist && sha256sum server.jar docker-compose.yml > SHA256SUMS && cat SHA256SUMS )
+
+      - name: Verify the jar reports the released version
+        run: |
+          set -euo pipefail
+          version="${{ steps.release.outputs.version }}"
+          reported=$(java -jar dist/server.jar --print-version)
+          echo "jar reports: $reported"
+          test "$reported" = "$version" || {
+            echo "::error::the jar reports '$reported' but '$version' was requested"
+            exit 1
+          }
+
+      # --- container image ---------------------------------------------------
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ !inputs.dry_run }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.release.outputs.version }}
+            type=raw,value=${{ steps.release.outputs.major_minor }}
+            type=raw,value=latest,enable=${{ inputs.push_latest }}
+          labels: |
+            org.opencontainers.image.title=abdm-server
+            org.opencontainers.image.description=Self-hosted download manager (Ktor + Vue 3)
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+
+      - name: Build and push the multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ !inputs.dry_run }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          cache-from: type=gha,scope=release-manual
+          cache-to: type=gha,mode=max,scope=release-manual
+
+      # --- tag + release (last, so a failure above leaves no tag) ------------
+      - name: Create and push the tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "abdm-server $tag"
+          git push origin "$tag"
+          echo "tagged $(git rev-parse HEAD) as $tag"
+
+      - name: Create the GitHub Release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: abdm-server ${{ steps.release.outputs.tag }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ inputs.ref }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            dist/server.jar
+            dist/docker-compose.yml
+            dist/SHA256SUMS
+          body: |
+            ## abdm-server ${{ steps.release.outputs.tag }}
+
+            Built from `${{ inputs.ref }}` (`${{ github.sha }}`).
+
+            Container image (multi-arch, `linux/amd64` + `linux/arm64`):
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.release.outputs.version }}
+            # or: ghcr.io/${{ github.repository }}:${{ steps.release.outputs.major_minor }}
+            ```
+
+            Release assets:
+
+            | File | Description |
+            | --- | --- |
+            | `server.jar` | Executable fat jar (`java -jar server.jar`) |
+            | `docker-compose.yml` | Compose file matching this release |
+            | `SHA256SUMS` | SHA-256 checksums of the two files above |
+
+            Verify before running:
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+
+            Run the jar on JDK 17 or newer:
+
+            ```bash
+            java -jar server.jar
+            ```
+
+            Upstream engine pin: see `docs/upstream.md`.
+            This project is not affiliated with or endorsed by AB Download Manager.
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          version="${{ steps.release.outputs.version }}"
+          {
+            echo "### Release summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| version | \`$version\` |"
+            echo "| git tag | \`${{ steps.release.outputs.tag }}\` |"
+            echo "| ref | \`${{ inputs.ref }}\` |"
+            echo "| commit | \`$(git rev-parse HEAD)\` |"
+            echo "| image | \`ghcr.io/${{ github.repository }}:$version\` |"
+            echo "| dry run | \`${{ inputs.dry_run }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

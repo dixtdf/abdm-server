@@ -48,6 +48,13 @@ import java.nio.file.Path
  * -> static frontend -> restart recovery.
  */
 fun main(args: Array<String>) {
+    // `--print-version` lets the release pipeline prove that the built jar carries the
+    // version it is about to publish.
+    if (args.any { it == "--print-version" || it == "-V" || it == "--version" }) {
+        println(serverVersion())
+        return
+    }
+
     val config = AppConfig.fromEnvironment()
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", config.logLevel)
 
@@ -59,6 +66,14 @@ fun main(args: Array<String>) {
     )
     runBlocking { server.start(wait = true) }
 }
+
+/**
+ * Version of this build: the jar manifest first (so a release build reports the version
+ * it was released as), falling back to the version this source tree was developed as.
+ */
+internal fun serverVersion(): String =
+    DownloadServer::class.java.`package`?.implementationVersion?.takeIf { it.isNotBlank() }
+        ?: FALLBACK_VERSION
 
 class DownloadServer(private val config: AppConfig) {
 
@@ -115,7 +130,7 @@ class DownloadServer(private val config: AppConfig) {
             settings = settingsRepository,
             tasks = taskRepository,
             config = WebApi.ApiConfig(
-                version = VERSION,
+                version = serverVersion(),
                 apiVersion = API_VERSION,
                 startedAt = startedAt,
                 authMode = config.authMode,
@@ -343,7 +358,10 @@ class DownloadServer(private val config: AppConfig) {
     }
 
     private companion object {
-        const val VERSION = "0.1.0"
+        val VERSION: String = serverVersion()
         const val API_VERSION = "v1"
     }
 }
+
+/** Version this source tree declares; a release jar overrides it from the manifest. */
+private const val FALLBACK_VERSION = "0.1.0"
