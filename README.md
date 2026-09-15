@@ -1,5 +1,7 @@
 # abdm-server
 
+**简体中文** | [English](README_en.md)
+
 自托管的下载管理器：一个 JVM 进程同时提供 REST/WebSocket API 与打包好的 Web 界面，
 面向局域网（LAN-first）部署，默认使用内置的分段下载引擎，也可以切换到
 AB Download Manager 作为后端引擎。
@@ -284,6 +286,14 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 单元测试侧，`server/engine-native` 里的 `NativeDownloadEngineTest` 用同一个思路在进程内跑
 （自带 Range 服务器），其中 `a restart resumes from the sqlite checkpoint instead of starting over`
 就是“重启后续传”的回归测试；`AbdmCompatibilityTest` 则用真实 ABDM 引擎跑同一组场景。
+
+---
+
+## 致谢 Acknowledgements
+
+特别鸣谢 **AB Download Manager（ABDM）及其全部贡献者**：本项目的下载核心、分片模型，以及
+“连接 / 分片”视图的交互设计，都源自他们的工作；`engine-abdm` 直接复用其运行时，
+没有 ABDM 就不会有这个项目。也感谢 Kotlin、Ktor、SQLite JDBC、Vue、Vite 等开源社区。
 
 ---
 

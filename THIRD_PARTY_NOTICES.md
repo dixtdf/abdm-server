@@ -10,6 +10,9 @@ own source distribution and are not duplicated here.
 - URL: https://github.com/amir1376/ab-download-manager
 - License: Apache License 2.0
 - Copyright: the AB Download Manager authors
+- Special thanks: AB Download Manager (ABDM) and **all of its contributors**. The
+download core, the part/segment model and the connections table of this project
+follow their work, and `server/engine-abdm/` reuses their runtime directly.
 - How it is used: consumed as a git submodule at
   `third_party/ab-download-manager`, pinned to commit
   `afc57634b3c121c6415213242b2b600cccc6fd6e` (release line `v1.10.4`). The
