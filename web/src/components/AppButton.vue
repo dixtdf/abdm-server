@@ -116,6 +116,25 @@ withDefaults(
   border: 2px solid currentColor;
   border-top-color: transparent;
   animation: btn-spin 700ms linear infinite;
+  flex: none;
+}
+
+/*
+ * The label is its own flex row: icon + text are centred as one group and share the
+ * button's gap. Without this the inline SVG sat on the text baseline, which pushed
+ * the icon/text pair off centre (visible on "刷新" / "新建下载").
+ */
+.btn__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  line-height: 1;
+}
+
+.btn__label :deep(svg) {
+  flex: none;
+  display: block;
 }
 
 @keyframes btn-spin {
