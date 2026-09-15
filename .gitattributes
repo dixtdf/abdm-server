@@ -1,0 +1,9 @@
+# Line endings and the executable bit of the shell entry points.
+#
+# CI runs `./gradlew` directly on Linux, so the file must keep mode 100755 and LF
+# endings. A Windows checkout with core.filemode=false does not preserve the bit by
+# itself - that is what made the first pipeline run fail with "Permission denied".
+gradlew      text eol=lf
+*.sh         text eol=lf
+
+gradlew.bat  text eol=crlf
