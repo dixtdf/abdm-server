@@ -63,14 +63,17 @@ Every string comes from `web/src/locales/*.json`, so you can preview it locally 
    PORT=6868
    ```
 
-2. Start it:
+2. Prepare the directories once (the image runs as the non-root uid 1000, so
+   **no `privileged` is needed**; the host directories must be writable by uid 1000):
 
    ```bash
-   mkdir -p config/abdm
-   chmod +x config
+   mkdir -p config
+   sudo chown -R 1000:1000 config       # same for /downloads
    docker compose up -d
    docker compose logs -f downloader
    ```
+
+   If the permissions are wrong the server refuses to start and prints that command.
 
 3. Verify (the image ships the same health check):
 

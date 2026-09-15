@@ -61,9 +61,33 @@ data class AppConfig(
             System.getProperty("os.name").lowercase().contains("win")
     }
 
+    /**
+     * Creates the writable directories at boot and fails with an actionable message
+     * when it cannot: in Docker the usual cause is a root-owned `./config` that the
+     * non-root (uid 1000) server is not allowed to write.
+     */
     fun ensureDirectories() {
-        Files.createDirectories(configDir)
-        Files.createDirectories(downloadRoot)
-        Files.createDirectories(abdmDataFolder)
+        ensureWritable(configDir, "ABDM_CONFIG_DIR")
+        ensureWritable(abdmDataFolder, "ABDM_CONFIG_DIR")
+        ensureWritable(downloadRoot, "ABDM_DOWNLOAD_ROOT")
+    }
+
+    private fun ensureWritable(path: Path, variable: String) {
+        try {
+            Files.createDirectories(path)
+            if (!Files.isDirectory(path) || !Files.isWritable(path)) {
+                throw java.io.IOException("not a writable directory")
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                buildString {
+                    append("cannot use ").append(path).append(" ($variable): ").append(e.message).append('\n')
+                    append("  Docker: the container runs as uid 1000, so the host directory must be writable by it:\n")
+                    append("    sudo mkdir -p ./config && sudo chown -R 1000:1000 ./config\n")
+                    append("  Bare metal: create the directory and make it writable by the user running the server.")
+                },
+                e,
+            )
+        }
     }
 }

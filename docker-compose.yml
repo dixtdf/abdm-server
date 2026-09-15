@@ -37,7 +37,13 @@ services:
     image: ghcr.io/${IMAGE_OWNER:-dixtdf}/abdm-server:${IMAGE_TAG:-latest}
     container_name: ${CONTAINER_NAME:-abdm-server}
     restart: always
-    privileged: true
+    # No `privileged: true`: the image runs as uid 1000 and nothing in it needs extra
+    # capabilities (no FUSE, no iptables, no docker socket). Privileged mode would not
+    # even fix the one thing people usually reach for it for - a root-owned ./config -
+    # because capabilities do not apply to a non-root process. Make the host directory
+    # writable by uid 1000 instead:
+    #   sudo mkdir -p ./config && sudo chown -R 1000:1000 ./config
+    # The server also refuses to start with a message telling you exactly this.
 
     ports:
       # host:container. The container always listens on the image's PORT (6868);
@@ -65,3 +71,12 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+
+    # Guard rail, not a tuning knob: downloads stream to disk with small buffers
+    # (256 connections ≈ tens of MB), so 2 GB of cgroup limit gives the JVM
+    # (MaxRAMPercentage=75 → 1.5 GB heap) plenty of room while keeping a runaway
+    # process from eating the whole NAS. Raise it if you deliberately want more.
+    deploy:
+      resources:
+        limits:
+          memory: 2g

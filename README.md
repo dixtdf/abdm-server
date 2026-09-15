@@ -57,14 +57,17 @@ AB Download Manager 作为后端引擎。
    PORT=6868
    ```
 
-2. 启动：
+2. 首次运行准备目录（镜像以 uid 1000 的非 root 用户运行，**不需要 privileged**；
+   宿主机目录必须让 uid 1000 可写）：
 
    ```bash
-   mkdir -p config/abdm
-   chmod +x config
+   mkdir -p config
+   sudo chown -R 1000:1000 config       # /downloads 同理
    docker compose up -d
    docker compose logs -f downloader
    ```
+
+   目录权限不对时服务会直接拒绝启动，并打印上面这条命令。
 
 3. 验证（容器内置同样的健康检查）：
 
