@@ -43,7 +43,7 @@ The dependency edges only point downwards. Nothing in `web-api`, `scheduler`,
 | `server:web-api` | Routes from `docs/api.md`, DTO mapping, auth filter, WebSocket hub | know which engine is running |
 | `server:scheduler` | Queue, per-task state machine, concurrency budget, restart recovery | touch sockets or files |
 | `server:engine-api` | `DownloadEngine`, `TaskSnapshot`, `EngineEvent`, `DownloadState`, `PathGuard`, storage ports | import vendor types |
-| `server:engine-native` | Segmented HTTP/HTTPS, range planning, interval bookkeeping, HLS, speed limit, checksums | expose engine-internal types to the API |
+| `server:engine-native` | Segmented HTTP/HTTPS, per-connection **parts** (one row per connection, like upstream), live re-partitioning, interval bookkeeping, HLS, speed limit, checksums | expose engine-internal types to the API; lose bytes when the connection count changes |
 | `server:engine-abdm` | Translates the upstream AB Download Manager runtime into `DownloadEngine`; compiles a stub when `abdm.enabled=false` | leak upstream types upwards; modify `third_party/` |
 | `server:persistence` | SQLite schema, migrations, checkpoint writes, history, settings | hold business rules |
 | `web` | Vue 3 SPA, i18n, WebSocket consumption | poll REST for progress |

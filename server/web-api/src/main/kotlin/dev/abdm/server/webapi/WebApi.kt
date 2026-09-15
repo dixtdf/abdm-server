@@ -332,6 +332,11 @@ class WebApi(
     private fun EngineEvent.toEnvelope(): EventEnvelope? = when (this) {
         is EngineEvent.Added -> EventEnvelope(type = "download.added", taskId = taskId, task = task.toDto())
         is EngineEvent.Progress -> EventEnvelope(type = "download.progress", taskId = taskId, progress = progress.toDto())
+        is EngineEvent.PartsUpdated -> EventEnvelope(
+            type = "download.parts",
+            taskId = taskId,
+            parts = parts.map { it.toDto() },
+        )
         is EngineEvent.StateChanged -> EventEnvelope(
             type = "download.state",
             taskId = taskId,

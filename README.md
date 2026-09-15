@@ -19,6 +19,8 @@ AB Download Manager 作为后端引擎。
   `queuePosition`。
 - **实时进度**：进度通过 WebSocket 推送（`download.progress` / `download.state` / …），
   按 `progressIntervalMs` 节流；前端不再轮询 REST。
+- **每个连接的分片视图**：与 ABDM 桌面端一致的“连接 / 分片”表（`#` / 状态 / 已下载 / 总大小 / 速度），
+  通过 `download.parts` 帧推送；下载中改连接数会重划分片，已下载字节保留、数字不归零。
 - **限速**：全局 `globalSpeedLimit` 与单任务 `speedLimit`。
 - **HLS、校验和、代理、自定义请求头 / Cookie / Referer / User-Agent**：按任务粒度配置。
 - **持久化**：SQLite（WAL）保存任务、进度检查点、历史记录与设置，

@@ -2,6 +2,7 @@ package dev.abdm.server.engine.native
 
 import dev.abdm.server.engine.api.EngineErrorCode
 import dev.abdm.server.engine.api.EngineException
+import dev.abdm.server.engine.api.PartState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -65,15 +66,16 @@ internal class HlsDownloader(private val engine: NativeDownloadEngine) {
         val written = AtomicInteger(0)
         try {
             val window = task.connections.coerceIn(1, 6)
-            val pending = ArrayDeque<Deferred<ByteArray>>()
-            for (segment in segments) {
+            val pending = ArrayDeque<Pair<Int, Deferred<ByteArray>>>()
+            segments.forEachIndexed { index, segment ->
                 while (pending.size >= window) {
-                    val head = pending.removeFirst()
-                    writeSegment(output, head.await(), task, written)
+                    val (headIndex, deferred) = pending.removeFirst()
+                    writeSegment(output, deferred.await(), task, written, headIndex + 1)
                 }
                 task.markActiveSegments(1)
+                task.updateSegment(index + 1, PartState.DOWNLOADING, 0, 0)
                 pending.addLast(
-                    engine.scope.async {
+                    index to engine.scope.async {
                         try {
                             fetchBytes(client, segment.uri, task)
                         } finally {
@@ -83,7 +85,8 @@ internal class HlsDownloader(private val engine: NativeDownloadEngine) {
                 )
             }
             while (pending.isNotEmpty()) {
-                writeSegment(output, pending.removeFirst().await(), task, written)
+                val (headIndex, deferred) = pending.removeFirst()
+                writeSegment(output, deferred.await(), task, written, headIndex + 1)
             }
             output.flush()
         } finally {
@@ -98,11 +101,13 @@ internal class HlsDownloader(private val engine: NativeDownloadEngine) {
         bytes: ByteArray,
         task: DownloadTaskRunner,
         counter: AtomicInteger,
+        index: Int,
     ) {
         output.write(bytes)
         output.flush()
         counter.addAndGet(bytes.size)
         task.addBytes(0, bytes.size.toLong(), bytes.size.toLong())
+        task.updateSegment(index, PartState.DONE, bytes.size.toLong(), bytes.size.toLong())
     }
 
     // ------------------------------------------------------------------ parsing

@@ -270,5 +270,25 @@
     "UNSUPPORTED_OPERATION": "不支持该操作。",
     "INTERNAL": "服务器发生内部错误。",
     "UNAUTHORIZED": "未授权，请提供有效的访问令牌。"
+  },
+  "part": {
+    "state": {
+      "CONNECTING": "发送请求",
+      "DOWNLOADING": "下载中",
+      "WAITING": "等待",
+      "IDLE": "空闲",
+      "DONE": "已完成",
+      "FAILED": "失败"
+    }
+  },
+  "parts": {
+    "title": "连接 / 分片",
+    "summary": "共 {count} 个分片，{downloaded} / {total}",
+    "empty": "开始下载后这里会显示每个连接的进度。",
+    "state": "状态",
+    "downloaded": "已下载",
+    "total": "总大小",
+    "speed": "速度",
+    "repartitionHint": "下载中修改连接数会重新划分分片，已下载的字节会保留。"
   }
 }

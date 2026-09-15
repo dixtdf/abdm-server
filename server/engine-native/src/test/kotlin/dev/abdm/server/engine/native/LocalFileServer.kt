@@ -17,8 +17,14 @@ class LocalFileServer(
     private val payload: ByteArray,
     private val fileName: String = "file.bin",
     private val supportRange: Boolean = true,
+    /** Aggregate cap across all connections; 0 = unlimited. Slows a download down
+     *  enough for progress/pause/parts assertions to be meaningful on localhost. */
+    private val bytesPerSecond: Long = 0,
     private val onRequest: ((HttpExchange) -> Unit)? = null,
 ) : AutoCloseable {
+
+    private var windowStart = System.currentTimeMillis()
+    private var windowBytes = 0L
 
     private val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 512)
     private val executor: ExecutorService = Executors.newFixedThreadPool(
@@ -53,10 +59,38 @@ class LocalFileServer(
             val length = (endInclusive - start + 1).toInt()
             headers.add("Content-Range", "bytes $start-$endInclusive/${payload.size}")
             exchange.sendResponseHeaders(206, length.toLong())
-            exchange.responseBody.use { it.write(payload, start.toInt(), length) }
+            exchange.responseBody.use { it.writeThrottled(payload, start.toInt(), length) }
         } else {
             exchange.sendResponseHeaders(200, payload.size.toLong())
-            exchange.responseBody.use { it.write(payload) }
+            exchange.responseBody.use { it.writeThrottled(payload, 0, payload.size) }
+        }
+    }
+
+    private fun java.io.OutputStream.writeThrottled(source: ByteArray, offset: Int, length: Int) {
+        val block = 64 * 1024
+        var written = 0
+        while (written < length) {
+            val chunk = minOf(block, length - written)
+            write(source, offset + written, chunk)
+            flush()
+            written += chunk
+            throttle(chunk)
+        }
+    }
+
+    @Synchronized
+    private fun throttle(chunk: Int) {
+        if (bytesPerSecond <= 0) return
+        val now = System.currentTimeMillis()
+        if (now - windowStart > 5_000) {
+            windowStart = now
+            windowBytes = 0
+        }
+        windowBytes += chunk
+        val expectedMillis = windowBytes * 1000 / bytesPerSecond
+        val elapsed = now - windowStart
+        if (expectedMillis > elapsed) {
+            Thread.sleep(expectedMillis - elapsed)
         }
     }
 

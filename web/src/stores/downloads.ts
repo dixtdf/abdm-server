@@ -8,6 +8,7 @@ import type {
   CreateDownload,
   DownloadProgress,
   HistoryEntry,
+  PartProgress,
   ServerEvent,
   Task,
 } from '../api/types'
@@ -58,6 +59,11 @@ function mergeProgress(task: Task, progress: DownloadProgress): Task {
   }
 }
 
+/** The connection table rides on its own (slower) frame, so it is merged separately. */
+function mergeParts(task: Task, parts: PartProgress[]): Task {
+  return { ...task, parts }
+}
+
 /**
  * Pure reducer for the `/api/v1/events` stream. Kept free of Pinia so it can be
  * unit tested directly; the store below only wraps it.
@@ -81,6 +87,15 @@ export function applyEvent(tasks: Task[], event: ServerEvent): Task[] {
       if (!progressChanged(current, next)) return tasks
       const copy = tasks.slice()
       copy[index] = next
+      return copy
+    }
+
+    case 'download.parts': {
+      const index = tasks.findIndex((task) => task.id === event.taskId)
+      if (index < 0) return tasks
+      const current = tasks[index] as Task
+      const copy = tasks.slice()
+      copy[index] = mergeParts(current, event.parts)
       return copy
     }
 

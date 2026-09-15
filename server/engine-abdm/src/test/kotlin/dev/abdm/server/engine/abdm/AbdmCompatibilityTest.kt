@@ -109,6 +109,14 @@ class AbdmCompatibilityTest {
                 assertTrue(Files.exists(Path.of(snapshot.path)), "output file at ${snapshot.path}")
                 assertContentEquals(payload, Files.readAllBytes(Path.of(snapshot.path)))
 
+                // The web UI shows the same part table the desktop client shows, so the
+                // adapter must expose upstream's own range rows.
+                assertTrue(snapshot.parts.isNotEmpty(), "the upstream part table must be exposed")
+                assertTrue(
+                    snapshot.parts.all { it.total > 0 },
+                    "every row needs the size of its range: ${snapshot.parts}",
+                )
+
                 engine.remove(id, deleteFile = true)
                 assertEquals(null, engine.get(id))
             } finally {
@@ -137,6 +145,10 @@ class AbdmCompatibilityTest {
                 val paused = engine.get(id)!!
                 assertEquals(DownloadState.PAUSED, paused.state)
                 assertTrue((paused.downloaded) > 0, "partial progress must survive a pause")
+                assertTrue(
+                    paused.parts.isNotEmpty(),
+                    "a running upstream download must report its range rows: ${paused.parts}",
+                )
 
                 engine.resume(id)
                 waitUntil(180_000) { engine.get(id)?.state?.isTerminal == true }

@@ -23,6 +23,17 @@ data class ErrorDto(
 data class ErrorEnvelope(val error: ErrorDto)
 
 @Serializable
+data class PartDto(
+    val index: Int,
+    val state: String,
+    val downloaded: Long,
+    val total: Long,
+    val progress: Double = 0.0,
+    val speed: Long = 0,
+    val rangeStart: Long = 0,
+)
+
+@Serializable
 data class TaskDto(
     val id: String,
     val url: String,
@@ -37,6 +48,8 @@ data class TaskDto(
     val averageSpeed: Long,
     val connections: Int,
     val activeConnections: Int,
+    /** One row per connection, in the order of the current partition. */
+    val parts: List<PartDto> = emptyList(),
     val etaSeconds: Long,
     val supportsRange: Boolean,
     val hls: Boolean,
@@ -174,6 +187,7 @@ data class EventEnvelope(
     val error: ErrorDto? = null,
     val requested: Int? = null,
     val active: Int? = null,
+    val parts: List<PartDto>? = null,
     val deletedFile: Boolean? = null,
     val server: ServerHelloDto? = null,
     val tasks: List<TaskDto>? = null,
@@ -197,6 +211,7 @@ fun TaskSnapshot.toDto(queuePosition: Int? = this.queuePosition): TaskDto = Task
     averageSpeed = averageSpeed,
     connections = connections,
     activeConnections = activeConnections,
+    parts = parts.map { it.toDto() },
     etaSeconds = etaSeconds,
     supportsRange = supportsRange,
     hls = hls,
@@ -207,6 +222,16 @@ fun TaskSnapshot.toDto(queuePosition: Int? = this.queuePosition): TaskDto = Task
     startedAt = startedAt,
     completedAt = completedAt,
     queuePosition = queuePosition,
+)
+
+fun dev.abdm.server.engine.api.PartProgress.toDto(): PartDto = PartDto(
+    index = index,
+    state = state.name,
+    downloaded = downloaded,
+    total = total,
+    progress = progress,
+    speed = speed,
+    rangeStart = rangeStart,
 )
 
 fun TaskProgress.toDto(): ProgressDto = ProgressDto(

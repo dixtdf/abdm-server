@@ -54,6 +54,9 @@ The frontend renders `errors.<CODE>` from the locale files and interpolates
   "averageSpeed": 81234567,
   "connections": 64,
   "activeConnections": 61,
+  "parts": [
+    { "index": 1, "state": "DOWNLOADING", "downloaded": 21495808, "total": 33554432, "progress": 0.64, "speed": 3145728, "rangeStart": 0 }
+  ],
   "etaSeconds": 48,
   "supportsRange": true,
   "hls": false,
@@ -74,6 +77,34 @@ QUEUED CONNECTING DOWNLOADING PAUSING PAUSED COMPLETING COMPLETED FAILED CANCELE
 ```
 
 `total == -1` means unknown size, `etaSeconds == -1` means unknown ETA.
+
+### `parts`: the per connection table
+
+`parts` is the web equivalent of the part list the AB Download Manager desktop
+client shows while downloading: one entry per connection, in the order of the
+current partition.
+
+| Field | Meaning |
+| --- | --- |
+| `index` | 1-based row number within the current partition |
+| `state` | `CONNECTING` \| `DOWNLOADING` \| `WAITING` \| `IDLE` \| `DONE` \| `FAILED` |
+| `downloaded` | bytes this connection has written |
+| `total` | size of the range this connection is responsible for |
+| `progress` | `downloaded / total` |
+| `speed` | bytes/second of this connection (0 unless downloading) |
+| `rangeStart` | first byte of the range it owns |
+
+Invariants the UI relies on:
+
+1. `sum(parts[].total)` equals the size of the file, so the table always describes one
+   whole download.
+2. `sum(parts[].downloaded)` only grows by bytes actually written to disk.
+3. Changing the connection count while downloading **re-partitions**: parts are split
+   or merged, and the numbers of the surviving rows are kept (they never reset to 0).
+
+`parts` is empty while a task is queued, and for engines that do not split a download.
+HLS downloads fill the table with one row per media segment (`total` is `0` until the
+segment has been fetched, so the UI shows `Unknown`).
 
 ## Endpoints
 
@@ -157,6 +188,7 @@ Every subsequent frame:
 
 ```json
 { "type": "download.progress", "taskId": "3f9c...", "progress": { "downloaded": 1, "total": 2, "speed": 3, "averageSpeed": 3, "connections": 8, "activeConnections": 7, "etaSeconds": 12, "state": "DOWNLOADING" } }
+{ "type": "download.parts", "taskId": "3f9c...", "parts": [ { "index": 1, "state": "DOWNLOADING", "downloaded": 21495808, "total": 33554432, "progress": 0.64, "speed": 3145728, "rangeStart": 0 } ] }
 { "type": "download.state", "task": { /* Task */ }, "previous": "DOWNLOADING", "state": "COMPLETED", "error": null }
 { "type": "download.added", "task": { /* Task */ } }
 { "type": "download.connections", "task": { /* Task */ }, "requested": 64, "active": 61 }
@@ -165,7 +197,9 @@ Every subsequent frame:
 ```
 
 `download.progress` is throttled by `settings.progressIntervalMs` (default
-500 ms). The frontend must not poll the REST API for progress.
+500 ms). `download.parts` carries the (heavier) connection table on a slower cadence
+(about every 2 s per running task) and is only sent while a task is active. The
+frontend must not poll the REST API for progress.
 
 ## Error code catalogue
 

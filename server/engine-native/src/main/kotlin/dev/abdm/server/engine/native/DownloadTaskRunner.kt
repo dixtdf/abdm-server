@@ -10,6 +10,8 @@ import dev.abdm.server.engine.api.EngineEvent
 import dev.abdm.server.engine.api.EngineException
 import dev.abdm.server.engine.api.HistoryEntry
 import dev.abdm.server.engine.api.PathGuard
+import dev.abdm.server.engine.api.PartProgress
+import dev.abdm.server.engine.api.PartState
 import dev.abdm.server.engine.api.PersistedTask
 import dev.abdm.server.engine.api.ServerSettings
 import dev.abdm.server.engine.api.TaskProgress
@@ -96,7 +98,10 @@ internal class DownloadTaskRunner(
 
     private var supervisor: Job? = null
     private var progressJob: Job? = null
-    private var queue: WorkQueue? = null
+    private var plan: PartPlan? = null
+
+    /** Rows shown for HLS downloads (one per media segment). */
+    private val hlsParts = mutableListOf<PartProgress>()
     private val workers = mutableListOf<Job>()
     private var fatalError: EngineError? = null
 
@@ -105,13 +110,14 @@ internal class DownloadTaskRunner(
     val isRunning: Boolean get() = supervisor?.isActive == true
 
     /** Number of chunks that are queued or in flight but not written yet. */
-    val pendingChunks: Int get() = queue?.pendingCount ?: 0
+    val pendingChunks: Int get() = plan?.parts?.sumOf { it.queue.pendingCount } ?: 0
 
     /** Human readable internals, used by `DiagnoseTest` and bug reports. */
     fun diagnose(): String {
         val live = synchronized(lock) { workers.count { !it.isCompleted } }
+        val ranges = synchronized(lock) { plan?.remainingRanges()?.size ?: 0 }
         return "state=$state downloaded=${intervals.total()}/$total connections=$connections " +
-            "active=${activeConnections.get()} liveWorkers=$live queue=[${queue?.snapshot()}] " +
+            "active=${activeConnections.get()} liveWorkers=$live remainingRanges=$ranges " +
             "running=$isRunning ticker=${progressJob?.isActive} error=$error"
     }
 
@@ -127,6 +133,7 @@ internal class DownloadTaskRunner(
         } else {
             -1
         }
+        val parts = synchronized(lock) { plan?.snapshots() ?: hlsParts.toList() }
         return TaskSnapshot(
             id = id,
             url = request.url,
@@ -140,6 +147,7 @@ internal class DownloadTaskRunner(
             averageSpeed = average,
             connections = connections,
             activeConnections = activeConnections.get(),
+            parts = parts,
             etaSeconds = eta,
             supportsRange = supportsRange,
             hls = hls,
@@ -270,42 +278,44 @@ internal class DownloadTaskRunner(
         stopProgressTicker()
         synchronized(lock) {
             workers.clear()
-            queue = null
+            plan = null
+            hlsParts.clear()
         }
         if (deleteFile) {
             runCatching { Files.deleteIfExists(path) }
         }
     }
 
-    /** Live reconfiguration: never interrupts the transfer. */
-    fun changeConnections(value: Int) {
+    /** Live reconfiguration: re-partitions what is left, without losing bytes. */
+    suspend fun changeConnections(value: Int) {
         val target = Connections.coerce(value)
         val previous = connections
         connections = target
         request = request.copy(connections = target)
-        if (!isRunning) {
-            engine.emit(EngineEvent.ConnectionsChanged(snapshot(), target, 0))
+        if (!isRunning || !supportsRange || hls) {
+            engine.emit(EngineEvent.ConnectionsChanged(snapshot(), target, activeConnections.get()))
             checkpoint()
             return
         }
-        if (!supportsRange || hls) {
+        // Stop the current partition, rebuild it from the remaining ranges with the new
+        // count, then start again. In-flight chunks are handed back by the workers, so
+        // no byte is downloaded twice or lost.
+        val stopping = synchronized(lock) { workers.toList() }
+        stopping.forEach { it.cancel() }
+        stopping.joinAll()
+        val current = synchronized(lock) { plan }
+        if (current == null || current.isDone) {
             engine.emit(EngineEvent.ConnectionsChanged(snapshot(), target, activeConnections.get()))
             return
         }
-        var current = 0
+        val next = PartPlan.repartition(current, target)
         synchronized(lock) {
-            val current = workers.count { !it.isCompleted }
-            when {
-                target > current -> repeat(target - current) { addWorker() }
-                target < current -> {
-                    val removable = workers.filter { !it.isCompleted }.take(current - target)
-                    removable.forEach { it.cancel() }
-                    workers.removeAll(removable.toSet())
-                }
-            }
+            plan = next
+            workers.clear()
         }
-        log.info("task {} connections {} -> {} (previous requested {})", id, current, target, previous)
-        engine.emit(EngineEvent.ConnectionsChanged(snapshot(), target, activeConnections.get()))
+        launchWorkers(next)
+        log.info("task {} connections {} -> {} (previous requested {})", id, current.parts.size, target, previous)
+        engine.emit(EngineEvent.ConnectionsChanged(snapshot(), target, next.activeCount()))
     }
 
     // ------------------------------------------------------------------ internals
@@ -378,18 +388,19 @@ internal class DownloadTaskRunner(
             try {
                 job?.ensureActive()
             } catch (_: CancellationException) {
-                closeChannel()
+                // cancelled: workers are gone, keep the plan so the UI can still show
+                // the partition the user was looking at
+                stopProgressTicker()
             }
             if (state.isTerminal || state == DownloadState.PAUSED) {
                 stopProgressTicker()
-                closeChannel()
             }
         }
     }
 
     private fun closeChannel() {
         synchronized(lock) {
-            queue = null
+            plan = null
             workers.clear()
         }
     }
@@ -425,22 +436,19 @@ internal class DownloadTaskRunner(
         }
     }
 
-    /** Parallel chunk download. */
+    /** Segmented download: one [PartPlan.Part] per connection. */
     private suspend fun runSegmented() {
-        val planner = ChunkPlanner(total, rangeSupport = true)
-        val chunks = planner.plan(intervals.missing(total))
-        val workQueue = WorkQueue(chunks)
+        val chunkSize = ChunkPlanner(total, rangeSupport = true).chunkSize
+        val effective = ChunkPlanner.recommendedConnections(total, connections, true)
+        connections = effective
+        val next = PartPlan.plan(intervals.missing(total), effective, chunkSize)
         synchronized(lock) {
-            queue = workQueue
+            plan = next
             workers.clear()
         }
         startProgressTicker()
         changeState(if (intervals.total() > 0) DownloadState.RECOVERING else DownloadState.CONNECTING)
-        val effective = ChunkPlanner.recommendedConnections(total, connections, true)
-        if (effective != connections) {
-            connections = effective
-        }
-        synchronized(lock) { repeat(connections) { addWorker() } }
+        launchWorkers(next)
         // The ranged requests are on the wire now: CONNECTING/RECOVERING -> DOWNLOADING.
         changeState(DownloadState.DOWNLOADING)
         awaitWorkers()
@@ -453,52 +461,67 @@ internal class DownloadTaskRunner(
             intervals.clear()
         }
         val end = if (total > 0) total else Long.MAX_VALUE
-        val workQueue = WorkQueue(listOf(0L until end))
+        val next = PartPlan.plan(listOf(0L until end), 1, end.coerceAtLeast(1))
         synchronized(lock) {
-            queue = workQueue
+            plan = next
             workers.clear()
         }
         startProgressTicker()
         changeState(DownloadState.DOWNLOADING)
-        synchronized(lock) { addWorker(sequential = true) }
+        launchWorkers(next, sequential = true)
         awaitWorkers()
         if (fatalError != null) throw CancellationException("worker failure")
     }
 
-    private fun addWorker(sequential: Boolean = false) {
-        val scope = engine.scope
+    private fun launchWorkers(plan: PartPlan, sequential: Boolean = false) {
+        synchronized(lock) {
+            plan.parts.forEach { part -> addWorker(part, sequential) }
+        }
+    }
+
+    private fun addWorker(part: PartPlan.Part, sequential: Boolean = false) {
         val parent = supervisor ?: return
-        val job = scope.launch(parent) {
-            worker(sequential)
+        val job = engine.scope.launch(parent) {
+            worker(part, sequential)
         }
         workers.add(job)
     }
 
     private suspend fun awaitWorkers() {
         while (true) {
+            val finished = synchronized(lock) { plan?.isDone ?: true }
             val live = synchronized(lock) { workers.filter { !it.isCompleted } }
-            if (live.isEmpty()) return
-            live.joinAll()
+            if (finished && live.isEmpty()) return
+            if (live.isNotEmpty()) {
+                live.joinAll()
+            } else {
+                delay(20)
+            }
         }
     }
 
-    private suspend fun worker(sequential: Boolean) {
-        val workQueue = queue ?: return
+    /** One connection, working through its own part, updating the part table as it goes. */
+    private suspend fun worker(part: PartPlan.Part, sequential: Boolean) {
         while (coroutineContext.isActive) {
-            when (val take = workQueue.take()) {
+            when (val take = part.queue.take()) {
                 is WorkQueue.Take.Chunk -> {
+                    val range = take.range
+                    part.rangeStart = range.first
                     var handedBack = false
                     var attempt = 0
                     try {
                         while (true) {
                             try {
+                                part.state = PartState.CONNECTING
                                 activeConnections.incrementAndGet()
                                 try {
-                                    downloadChunk(take.range, sequential)
+                                    downloadChunk(range, sequential, part)
                                 } finally {
                                     activeConnections.decrementAndGet()
                                 }
-                                intervals.add(take.range.first, take.range.last + 1)
+                                part.state = PartState.DOWNLOADING
+                                intervals.add(range.first, range.last + 1)
+                                part.downloaded.addAndGet(range.last - range.first + 1)
                                 checkpointProgress()
                                 break
                             } catch (e: Throwable) {
@@ -506,30 +529,39 @@ internal class DownloadTaskRunner(
                                 attempt++
                                 if (attempt > engine.config.maxRetriesPerChunk) {
                                     fatalError = if (e is EngineException) e.error else e.toEngineError()
-                                    log.warn("chunk {} failed permanently: {}", take.range, fatalError)
+                                    part.state = PartState.FAILED
+                                    log.warn("part {} range {} failed permanently: {}", part.index, range, fatalError)
                                     return
                                 }
                                 delay(200L * attempt)
                             }
                         }
                     } catch (cancelled: CancellationException) {
-                        // Pause or fewer connections: hand the chunk back so the bytes
-                        // are fetched later instead of being silently lost.
-                        workQueue.requeue(take.range)
+                        // Pause or re-partition: hand the chunk back so the bytes are
+                        // fetched later instead of being silently lost.
+                        part.queue.requeue(range)
                         handedBack = true
                         throw cancelled
                     } finally {
-                        if (!handedBack) workQueue.complete()
+                        if (!handedBack) part.queue.complete()
+                        if (part.isFinished) part.markDone()
                     }
                 }
 
                 WorkQueue.Take.Wait -> delay(20)
-                WorkQueue.Take.Done -> return
+                WorkQueue.Take.Done -> {
+                    part.markDone()
+                    return
+                }
             }
         }
     }
 
-    private suspend fun downloadChunk(chunk: LongRange, sequential: Boolean) {
+    private suspend fun downloadChunk(
+        chunk: LongRange,
+        sequential: Boolean,
+        part: PartPlan.Part? = null,
+    ) {
         val client = engine.client(request)
         val requestRange = if (sequential) null else chunk
         val response = engine.http.openRange(client, engine.uri(request.url), request, requestRange)
@@ -567,8 +599,13 @@ internal class DownloadTaskRunner(
                     file.write(buffer, 0, read)
                     written += read
                     // Report throughput as bytes move, not per chunk: a throttled
-                    // download must still show a live speed and ETA.
+                    // download must still show a live speed and ETA, and the connection
+                    // must show "downloading" instead of "connecting" while it receives.
                     meter.onBytes(read.toLong())
+                    part?.let { current ->
+                        current.meter.onBytes(read.toLong())
+                        current.state = PartState.DOWNLOADING
+                    }
                     if (sequential) {
                         intervals.add(0, file.filePointer)
                     }
@@ -621,13 +658,23 @@ internal class DownloadTaskRunner(
     private fun startProgressTicker() {
         if (progressJob?.isActive == true) return
         progressJob = engine.scope.launch {
+            var ticks = 0
             while (isActive) {
                 delay(engine.progressIntervalMs())
                 if (!state.isActive) continue
                 engine.emit(EngineEvent.Progress(progress()))
+                // The per connection table is heavier than the scalar progress, so it
+                // is pushed on a slower cadence (and only while the task is running).
+                ticks++
+                if (ticks % PARTS_EVERY_N_TICKS == 0) {
+                    engine.emit(EngineEvent.PartsUpdated(id, currentParts()))
+                }
             }
         }
     }
+
+    /** Per connection rows, as shown in the UI. */
+    fun currentParts(): List<PartProgress> = synchronized(lock) { plan?.snapshots() ?: hlsParts.toList() }
 
     private fun stopProgressTicker() {
         progressJob?.cancel()
@@ -674,7 +721,34 @@ internal class DownloadTaskRunner(
 
     fun beginSegments(count: Int) {
         hls = true
+        synchronized(lock) {
+            hlsParts.clear()
+            repeat(count) { index ->
+                hlsParts.add(
+                    PartProgress(
+                        index = index + 1,
+                        state = PartState.WAITING,
+                        downloaded = 0,
+                        total = 0,
+                    ),
+                )
+            }
+        }
         engine.emit(EngineEvent.StateChanged(snapshot(), DownloadState.CONNECTING, null))
+    }
+
+    /** HLS reports one row per media segment (they are files, not byte ranges). */
+    fun updateSegment(index: Int, state: PartState, downloaded: Long, total: Long) {
+        synchronized(lock) {
+            val position = index - 1
+            if (position !in hlsParts.indices) return
+            hlsParts[position] = hlsParts[position].copy(
+                state = state,
+                downloaded = downloaded,
+                total = total,
+                rangeStart = 0,
+            )
+        }
     }
 
     fun markActiveSegments(delta: Int) {
@@ -697,4 +771,9 @@ internal class DownloadTaskRunner(
     }
 
     private fun LongRange.len(): Long = last - first + 1
+
+    private companion object {
+        /** ~2s with the default 500ms progress interval. */
+        const val PARTS_EVERY_N_TICKS = 4
+    }
 }

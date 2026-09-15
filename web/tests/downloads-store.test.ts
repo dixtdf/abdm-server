@@ -17,6 +17,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     averageSpeed: 900,
     connections: 8,
     activeConnections: 7,
+    parts: [],
     etaSeconds: 30,
     supportsRange: true,
     hls: false,
@@ -173,5 +174,26 @@ describe('downloads store reducer', () => {
   it('ignores pong frames', () => {
     const existing = [makeTask()]
     expect(applyEvent(existing, { type: 'pong' })).toBe(existing)
+  })
+
+  it('merges the per connection table from a download.parts frame', () => {
+    const existing = [makeTask({ id: 'a' }), makeTask({ id: 'b' })]
+    const next = applyEvent(existing, {
+      type: 'download.parts',
+      taskId: 'b',
+      parts: [
+        { index: 1, state: 'DOWNLOADING', downloaded: 512, total: 1024, progress: 0.5, speed: 128, rangeStart: 0 },
+        { index: 2, state: 'CONNECTING', downloaded: 0, total: 1024, progress: 0, speed: 0, rangeStart: 1024 },
+      ],
+    })
+
+    expect(next.find((task) => task.id === 'a')?.parts).toEqual([])
+    expect(next.find((task) => task.id === 'b')?.parts).toHaveLength(2)
+    expect(next.find((task) => task.id === 'b')?.parts[0]?.progress).toBe(0.5)
+    // the byte counters of the task itself are untouched by this frame
+    expect(next.find((task) => task.id === 'b')?.downloaded).toBe(100)
+
+    // unknown ids must not create tasks (progress frames may race the REST list)
+    expect(applyEvent(existing, { type: 'download.parts', taskId: 'nope', parts: [] })).toBe(existing)
   })
 })

@@ -270,5 +270,25 @@
     "UNSUPPORTED_OPERATION": "This operation is not supported.",
     "INTERNAL": "The server reported an internal error.",
     "UNAUTHORIZED": "Not authorized. Provide a valid access token."
+  },
+  "part": {
+    "state": {
+      "CONNECTING": "Sending request",
+      "DOWNLOADING": "Downloading",
+      "WAITING": "Waiting",
+      "IDLE": "Idle",
+      "DONE": "Done",
+      "FAILED": "Failed"
+    }
+  },
+  "parts": {
+    "title": "Connections",
+    "summary": "{count} parts, {downloaded} / {total}",
+    "empty": "Per connection progress appears here once the download starts.",
+    "state": "State",
+    "downloaded": "Downloaded",
+    "total": "Total",
+    "speed": "Speed",
+    "repartitionHint": "Changing the connection count while downloading re-partitions the ranges; already downloaded bytes are kept."
   }
 }

@@ -11,6 +11,8 @@ import dev.abdm.server.engine.api.EngineErrorCode
 import dev.abdm.server.engine.api.EngineEvent
 import dev.abdm.server.engine.api.EngineException
 import dev.abdm.server.engine.api.PathGuard
+import dev.abdm.server.engine.api.PartProgress
+import dev.abdm.server.engine.api.PartState
 import dev.abdm.server.engine.api.PersistedTask
 import dev.abdm.server.engine.api.ServerSettings
 import dev.abdm.server.engine.api.TaskProgress
@@ -48,6 +50,8 @@ import ir.amirab.downloader.downloaditem.http.HttpDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.HttpDownloadItem
 import ir.amirab.downloader.downloaditem.http.HttpDownloadJob
 import ir.amirab.downloader.downloaditem.http.HttpDownloader
+import ir.amirab.downloader.part.PartDownloadStatus
+import ir.amirab.downloader.part.RangedParts
 import ir.amirab.downloader.utils.EmptyFileCreator
 import ir.amirab.downloader.utils.IDiskStat
 import ir.amirab.downloader.utils.OnDuplicateStrategy
@@ -191,6 +195,7 @@ class AbdmDownloadEngine(
     )
 
     private val trackers = ConcurrentHashMap<Long, RateTracker>()
+    private val partTrackers = ConcurrentHashMap<String, RateTracker>()
     private val published = ConcurrentHashMap<Long, DownloadState>()
     private var ticker: Job? = null
 
@@ -403,6 +408,7 @@ class AbdmDownloadEngine(
             // Upstream drops the job once the file is finished, so fall back to the item.
             downloaded = item.contentLength.takeIf { it > 0 } ?: 0L
         }
+        val parts = upstreamParts(item, state)
         val tracker = trackers.computeIfAbsent(item.id) { RateTracker() }
         tracker.update(downloaded)
         val speed = if (state.isActive) tracker.rate() else 0L
@@ -431,6 +437,7 @@ class AbdmDownloadEngine(
             // Upstream does not expose the number of live part connections; report the
             // requested count while the transfer is running and 0 otherwise.
             activeConnections = if (state == DownloadState.DOWNLOADING) connections else 0,
+            parts = parts,
             etaSeconds = eta,
             supportsRange = (job as? HttpDownloadJob)?.supportsConcurrent ?: false,
             hls = item is HLSDownloadItem,
@@ -446,6 +453,41 @@ class AbdmDownloadEngine(
             completedAt = item.completeTime,
             queuePosition = null,
         )
+    }
+
+    /**
+     * Reads the *real* upstream part table for a task.
+     *
+     * AB Download Manager persists its parts (`RangedParts`) through `IDownloadPartListDb`,
+     * so the adapter can report exactly the rows the desktop client shows - same ranges,
+     * same status, same downloaded/total pair - without touching upstream internals.
+     */
+    private suspend fun upstreamParts(item: IDownloadItem, state: DownloadState): List<PartProgress> {
+        val stored = runCatching { manager.partListDb.getParts(item.id) }.getOrNull()
+        val ranged = stored as? RangedParts ?: return emptyList()
+        return ranged.list.mapIndexed { position, part ->
+            val downloaded = part.howMuchProceed()
+            val total = part.partLength ?: 0L
+            val partState = when {
+                part.isCompleted -> PartState.DONE
+                state == DownloadState.PAUSED -> PartState.IDLE
+                state == DownloadState.FAILED -> PartState.FAILED
+                part.statusFlow.value is PartDownloadStatus.ReceivingData -> PartState.DOWNLOADING
+                part.statusFlow.value is PartDownloadStatus.Connecting -> PartState.CONNECTING
+                part.statusFlow.value is PartDownloadStatus.Canceled -> PartState.FAILED
+                else -> PartState.IDLE
+            }
+            val tracker = partTrackers.computeIfAbsent("${item.id}:${position}") { RateTracker() }
+            tracker.update(downloaded)
+            PartProgress(
+                index = position + 1,
+                state = partState,
+                downloaded = downloaded,
+                total = total,
+                speed = if (partState == PartState.DOWNLOADING) tracker.rate() else 0,
+                rangeStart = part.from,
+            )
+        }
     }
 
     private fun TaskSnapshot.toProgress(): TaskProgress = TaskProgress(

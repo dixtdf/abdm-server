@@ -61,4 +61,21 @@ internal class WorkQueue(chunks: List<LongRange>) {
     }
 
     fun snapshot(): String = synchronized(lock) { "pending=$pending inFlight=$inFlight done=$done" }
+
+    /** Ranges that still have to be downloaded (call only after the workers stopped). */
+    fun remaining(): List<LongRange> = synchronized(lock) { pending.toList() }
+
+    /** Takes everything that is left, leaving the queue empty (used by re-partitioning). */
+    fun drainRemaining(): List<LongRange> = synchronized(lock) {
+        val all = pending.toList()
+        pending.clear()
+        all
+    }
+
+    /** Adds ranges back, keeping file order (used by re-partitioning). */
+    fun absorb(ranges: List<LongRange>) = synchronized(lock) {
+        pending.addAll(ranges)
+        pending.sortBy { it.first }
+        done = false
+    }
 }

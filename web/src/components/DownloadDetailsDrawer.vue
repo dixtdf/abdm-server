@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppButton from './AppButton.vue'
 import ConnectionStepper from './ConnectionStepper.vue'
+import ConnectionsTable from './ConnectionsTable.vue'
 import IconButton from './IconButton.vue'
 import IconClose from './icons/IconClose.vue'
 import IconCopy from './icons/IconCopy.vue'
@@ -280,6 +281,9 @@ async function copy(value: string | undefined, key: string): Promise<void> {
                 <dd class="row__value row__value--error">{{ errorMessage }}</dd>
               </div>
             </dl>
+
+            <!-- Same table the desktop client shows: one row per connection. -->
+            <ConnectionsTable :parts="task.parts" :connections="connections" />
           </div>
 
           <footer class="drawer__footer">

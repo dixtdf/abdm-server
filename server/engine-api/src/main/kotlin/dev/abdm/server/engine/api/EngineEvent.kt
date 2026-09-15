@@ -12,6 +12,15 @@ sealed interface EngineEvent {
         override val taskId: String get() = progress.id
     }
 
+    /**
+     * Per connection progress. Pushed less often than [Progress] because it carries a
+     * row per connection; the UI uses it to render its parts table.
+     */
+    data class PartsUpdated(
+        override val taskId: String,
+        val parts: List<PartProgress>,
+    ) : EngineEvent
+
     data class StateChanged(
         val task: TaskSnapshot,
         val previous: DownloadState,

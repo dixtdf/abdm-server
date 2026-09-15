@@ -24,6 +24,13 @@ data class TaskSnapshot(
     val connections: Int = Connections.DEFAULT,
     /** Connections currently transferring bytes. */
     val activeConnections: Int = 0,
+    /**
+     * Per connection progress, in the order of the current partition.
+     *
+     * Empty for engines that do not split the download (or before the first
+     * partition is built).
+     */
+    val parts: List<PartProgress> = emptyList(),
     /** Seconds left, `-1` when unknown. */
     val etaSeconds: Long = -1,
     val supportsRange: Boolean = false,

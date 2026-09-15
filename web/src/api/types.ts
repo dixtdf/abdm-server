@@ -43,6 +43,34 @@ export type ErrorCode = (typeof ERROR_CODES)[number] | (string & {})
 export const UNKNOWN_BYTES = -1
 export const UNKNOWN_ETA = -1
 
+export const PART_STATES = [
+  'CONNECTING',
+  'DOWNLOADING',
+  'WAITING',
+  'IDLE',
+  'DONE',
+  'FAILED',
+] as const
+
+export type PartState = (typeof PART_STATES)[number]
+
+/**
+ * One row of the connections/parts table - the web equivalent of the part list the
+ * AB Download Manager desktop client shows while downloading.
+ *
+ * `downloaded / total` is the progress of that single connection within the current
+ * partition; changing the connection count re-partitions the ranges.
+ */
+export interface PartProgress {
+  index: number
+  state: PartState
+  downloaded: number
+  total: number
+  progress: number
+  speed: number
+  rangeStart: number
+}
+
 export interface Task {
   id: string
   url: string
@@ -57,6 +85,8 @@ export interface Task {
   averageSpeed: number
   connections: number
   activeConnections: number
+  /** One row per connection, in the order of the current partition. */
+  parts: PartProgress[]
   etaSeconds: number
   supportsRange: boolean
   hls: boolean
@@ -169,6 +199,7 @@ export interface ServerInfo {
 export type ServerEvent =
   | { type: 'hello'; server: ServerInfo; tasks: Task[] }
   | { type: 'download.progress'; taskId: string; progress: DownloadProgress }
+  | { type: 'download.parts'; taskId: string; parts: PartProgress[] }
   | { type: 'download.state'; task: Task; previous: DownloadState | null; state: DownloadState; error: string | null }
   | { type: 'download.added'; task: Task }
   | { type: 'download.connections'; task: Task; requested: number; active: number }
