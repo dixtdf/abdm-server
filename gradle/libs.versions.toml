@@ -1,5 +1,5 @@
 [versions]
-project = "0.1.0"
+project = "0.2.0"
 # Kept in sync with the pinned AB Download Manager upstream (third_party/ab-download-manager):
 # the bridge classes are compiled against 2.4.10 / 1.11.0, so the server uses the same runtime.
 kotlin = "2.4.10"

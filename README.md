@@ -6,7 +6,7 @@
 面向局域网（LAN-first）部署，默认使用内置的分段下载引擎，也可以切换到
 AB Download Manager 作为后端引擎。
 
-- 版本：`0.1.0`
+- 版本：`0.2.0`
 - 仓库：<https://github.com/dixtdf/abdm-server>
 - 许可证：[Apache-2.0](LICENSE)
 - 上游引擎：[AB Download Manager](https://github.com/amir1376/ab-download-manager)

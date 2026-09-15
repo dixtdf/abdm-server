@@ -6,7 +6,7 @@ A self-hosted download manager: one JVM process that serves both the REST/WebSoc
 and a bundled web UI. It is built for LAN-first deployments, uses the built-in segmented
 download engine by default, and can switch to AB Download Manager as its backend engine.
 
-- Version: `0.1.0`
+- Version: `0.2.0`
 - Repository: <https://github.com/dixtdf/abdm-server>
 - License: [Apache-2.0](LICENSE)
 - Upstream engine: [AB Download Manager](https://github.com/amir1376/ab-download-manager)

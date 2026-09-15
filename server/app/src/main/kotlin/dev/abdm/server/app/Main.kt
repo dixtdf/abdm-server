@@ -364,4 +364,4 @@ class DownloadServer(private val config: AppConfig) {
 }
 
 /** Version this source tree declares; a release jar overrides it from the manifest. */
-private const val FALLBACK_VERSION = "0.1.0"
+private const val FALLBACK_VERSION = "0.2.0"
