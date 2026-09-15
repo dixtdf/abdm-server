@@ -43,6 +43,9 @@ downloads/
 docs/
 *.md
 !README.md
+# The frontend's i18n gate reads the error-code catalogue from docs/api.md inside
+# the image's web stage, so that one file has to survive the filter.
+!docs/api.md
 .idea/
 .vscode/
 *.iml

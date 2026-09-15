@@ -34,6 +34,12 @@ RUN npm ci
 
 COPY web/ ./
 
+# The i18n gate is `node ../scripts/check-i18n.mjs`, and that script reads the
+# error-code catalogue from `docs/api.md` - both live outside web/, so copy exactly
+# those two paths into the stage (.dockerignore re-includes docs/api.md for this).
+COPY scripts/check-i18n.mjs /scripts/check-i18n.mjs
+COPY docs/api.md /docs/api.md
+
 # i18n:check is the gate that every error code exists in every locale file.
 RUN npm run i18n:check \
  && npm run build
