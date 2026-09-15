@@ -43,6 +43,19 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # A Windows checkout with core.filemode=false can commit `gradlew` as 100644,
+      # which fails here with a bare "Permission denied" (exit 126). Fail fast with a
+      # message that says what to do instead.
+      - name: Check the shell entry points
+        run: |
+          set -euo pipefail
+          test -x gradlew || {
+            echo "::error::gradlew is not executable. Fix it with: git update-index --chmod=+x gradlew && git commit -m 'fix: restore the executable bit'"
+            exit 1
+          }
+          bash -n gradlew
+          for script in scripts/*.sh; do bash -n "$script"; done
+
       # abdm.enabled=false keeps CI free of any Android SDK requirement; the
       # adapter module compiles its stub and the server uses the native engine.
       - name: Build and test
