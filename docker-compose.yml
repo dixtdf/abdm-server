@@ -9,7 +9,7 @@
 #   AUTH_TOKEN=                      # only when AUTH_MODE=token
 #
 #   docker compose up -d
-#   curl http://127.0.0.1:8080/api/v1/health
+#   curl http://127.0.0.1:6868/api/v1/health
 #
 # Pulls the published image:
 #   image: ghcr.io/<IMAGE_OWNER>/abdm-server:<IMAGE_TAG>
@@ -36,10 +36,13 @@ services:
     # Defaults to the upstream project image; override IMAGE_OWNER in .env for your fork.
     image: ghcr.io/${IMAGE_OWNER:-dixtdf}/abdm-server:${IMAGE_TAG:-latest}
     container_name: ${CONTAINER_NAME:-abdm-server}
-    restart: unless-stopped
+    restart: always
+    privileged: true
 
     ports:
-      - "${PORT:-8080}:8080"
+      # host:container. The container always listens on the image's PORT (6868);
+      # PORT in .env only moves the host side of the mapping.
+      - "${PORT:-6868}:6868"
 
     volumes:
       # SQLite database, settings and logs. Must be writable by uid 1000.
@@ -57,14 +60,8 @@ services:
       ABDM_LOG_LEVEL: ${LOG_LEVEL:-info}
 
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6868/api/v1/health"]
       interval: 30s
       timeout: 5s
       start_period: 20s
       retries: 3
-
-    # SQLite in WAL mode is single-writer; one server per data directory.
-    deploy:
-      resources:
-        limits:
-          memory: 1g

@@ -9,7 +9,7 @@ an engine behind a narrow port interface.
 | Browser (LAN)                                                                    |
 |   Vue 3 + Vite SPA  ->  REST /api/v1/*   +   WebSocket /api/v1/events            |
 +--------------------------------------|------------------------------------------+
-                                       | HTTP + WS on :8080
+                                       | HTTP + WS on :6868
 +--------------------------------------v------------------------------------------+
 | server:app            Ktor (CIO) bootstrap, wiring, static files from ABDM_WEB_DIR|
 +----------------------------------------------------------------------------------+

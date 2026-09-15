@@ -60,11 +60,14 @@ Every string comes from `web/src/locales/*.json`, so you can preview it locally 
    AUTH_MODE=none            # or token
    AUTH_TOKEN=               # required when AUTH_MODE=token
    TZ=Asia/Shanghai
+   PORT=6868
    ```
 
 2. Start it:
 
    ```bash
+   mkdir -p config/abdm
+   chmod +x config
    docker compose up -d
    docker compose logs -f downloader
    ```
@@ -72,11 +75,11 @@ Every string comes from `web/src/locales/*.json`, so you can preview it locally 
 3. Verify (the image ships the same health check):
 
    ```bash
-   curl -fsS http://127.0.0.1:8080/api/v1/health
+   curl -fsS http://127.0.0.1:6868/api/v1/health
    # {"status":"ok","uptimeSeconds":3,"version":"0.1.0","engine":"native"}
    ```
 
-4. Open `http://<LAN IP>:8080`.
+4. Open `http://<LAN IP>:6868`.
 
 To use a locally built image: `docker build -t abdm-server:local .`, then point `image`
 at `abdm-server:local` using the override shown in the comments at the top of
@@ -89,7 +92,7 @@ build the `engine-abdm` adapter you additionally need JDK 25 (upstream pins
 `jvm.toolchain=25`) and an Android SDK, and you must export the upstream runtime first
 with `bash scripts/build-abdm-bridge.sh` (see below).
 
-Backend (default `native` engine, port 8080):
+Backend (default `native` engine, port 6868):
 
 ```bash
 # Linux / macOS
@@ -99,7 +102,7 @@ Backend (default `native` engine, port 8080):
 .\gradlew.bat :server:app:run
 ```
 
-Frontend dev server (Vite, port 5173, proxying to 8080):
+Frontend dev server (Vite, port 5173, proxying to 6868):
 
 ```bash
 cd web
@@ -128,7 +131,7 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP/WebSocket port |
+| `PORT` | `6868` | HTTP/WebSocket port |
 | `ABDM_CONFIG_DIR` | `/config` | SQLite database and runtime state (must be writable) |
 | `ABDM_DOWNLOAD_ROOT` | `/downloads` | Download root; also the path-safety boundary (must be writable) |
 | `ABDM_AUTH_MODE` | `none` | `none` or `token`; `none` prints a prominent warning at boot |
@@ -182,7 +185,7 @@ the frontend and `server:web-api`. Base path `/api/v1`; every error is
 
 This project targets **self-hosting on a LAN**, not public internet exposure.
 
-- **`AUTH_MODE=none` by default**: anyone who can reach port 8080 can control downloads.
+- **`AUTH_MODE=none` by default**: anyone who can reach port 6868 can control downloads.
   The server prints a warning at boot. Unless the network is fully trusted, set
   `AUTH_MODE=token` together with a long random `ABDM_AUTH_TOKEN`.
 - **Do not expose it directly to the internet.** For remote access use either:
@@ -193,7 +196,7 @@ This project targets **self-hosting on a LAN**, not public internet exposure.
   `downloadRoot`; `../` traversal and absolute escapes return `PATH_OUTSIDE_DOWNLOAD_ROOT`.
   `/config` is never reachable through the API.
 - **Least privilege container**: the image runs as the non-root user `abdm` (uid 1000),
-  exposes only 8080, and ships no Node/npm/Gradle/source at runtime.
+  exposes only 6868, and ships no Node/npm/Gradle/source at runtime.
 - **Single writer**: SQLite runs in WAL mode; the `/config` directory must belong to one
   service instance at a time.
 - **Tokens never reach logs**: `ABDM_AUTH_TOKEN` is injected through the environment; do not
@@ -275,8 +278,8 @@ Container:
 
 ```bash
 docker build -t abdm-server:local .
-docker run --rm -p 8080:8080 -v "$PWD/config:/config" -v /mnt/downloads:/downloads abdm-server:local
-curl -fsS http://127.0.0.1:8080/api/v1/health
+docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloads abdm-server:local
+curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
 CI workflows: `.github/workflows/ci.yml` (backend / frontend / docker / abdm-compat),
@@ -296,7 +299,7 @@ checklist: segmented download, **changing the connection count mid-download**
 # 1) start a Range-capable local file server (--throttle slows it down for observation)
 node scripts/test-http-server.mjs ./big.bin 9100 --throttle 262144
 
-# 2) start the service (port 8080 by default)
+# 2) start the service (port 6868 by default)
 ./gradlew :server:app:fatJar
 java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
 

@@ -16,7 +16,7 @@
 # third_party/abdm-dist (exported by scripts/build-abdm-bridge.sh) in the
 # context, and both third_party/ paths are excluded below.
 #
-# Runtime contract: HTTP 8080, health probe GET /api/v1/health,
+# Runtime contract: HTTP 6868, health probe GET /api/v1/health,
 # SQLite (WAL) at /config/database.sqlite, writable /config and /downloads.
 # =============================================================================
 
@@ -110,15 +110,15 @@ COPY --from=web /web/dist /app/web
 ENV ABDM_WEB_DIR=/app/web \
     ABDM_CONFIG_DIR=/config \
     ABDM_DOWNLOAD_ROOT=/downloads \
-    PORT=8080 \
+    PORT=6868 \
     TZ=Asia/Shanghai
 
 VOLUME ["/config", "/downloads"]
 
-EXPOSE 8080
+EXPOSE 6868
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1
+  CMD curl -fsS http://127.0.0.1:6868/api/v1/health || exit 1
 
 USER abdm
 

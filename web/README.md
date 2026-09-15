@@ -11,7 +11,7 @@ The wire contract lives in [`../docs/api.md`](../docs/api.md) and is mirrored by
 
 ```bash
 npm install
-npm run dev          # dev server on :5173, proxies /api (and the WS) to :8080
+npm run dev          # dev server on :5173, proxies /api (and the WS) to :6868
 npm run build        # -> web/dist
 npm run preview      # serve the production build
 npm run lint         # ESLint 9 flat config (vue + ts + no-bare-strings-in-template)

@@ -10,7 +10,7 @@ import java.nio.file.Path
  * documented contract (see README "Configuration"):
  *
  * ```
- * PORT               8080
+ * PORT               6868
  * ABDM_CONFIG_DIR    /config      (SQLite + ABDM state)
  * ABDM_DOWNLOAD_ROOT /downloads   (the only writable area of the API)
  * ABDM_WEB_DIR       /app/web     (built frontend; embedded in the jar as fallback)
@@ -23,7 +23,7 @@ import java.nio.file.Path
  */
 data class AppConfig(
     val host: String = "0.0.0.0",
-    val port: Int = 8080,
+    val port: Int = 6868,
     val configDir: Path = Path.of("/config"),
     val downloadRoot: Path = Path.of("/downloads"),
     val webDir: Path? = null,
@@ -45,7 +45,7 @@ data class AppConfig(
 
             return AppConfig(
                 host = value("ABDM_HOST", "HOST") ?: "0.0.0.0",
-                port = (value("PORT", "ABDM_PORT") ?: "8080").toIntOrNull() ?: 8080,
+                port = (value("PORT", "ABDM_PORT") ?: "6868").toIntOrNull() ?: 6868,
                 configDir = Path.of(value("ABDM_CONFIG_DIR") ?: defaultConfigDir).toAbsolutePath().normalize(),
                 downloadRoot = Path.of(value("ABDM_DOWNLOAD_ROOT") ?: defaultDownloadRoot)
                     .toAbsolutePath().normalize(),

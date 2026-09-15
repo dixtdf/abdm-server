@@ -54,11 +54,14 @@ AB Download Manager 作为后端引擎。
    AUTH_MODE=none            # 或 token
    AUTH_TOKEN=               # AUTH_MODE=token 时填写
    TZ=Asia/Shanghai
+   PORT=6868
    ```
 
 2. 启动：
 
    ```bash
+   mkdir -p config/abdm
+   chmod +x config
    docker compose up -d
    docker compose logs -f downloader
    ```
@@ -66,11 +69,11 @@ AB Download Manager 作为后端引擎。
 3. 验证（容器内置同样的健康检查）：
 
    ```bash
-   curl -fsS http://127.0.0.1:8080/api/v1/health
+   curl -fsS http://127.0.0.1:6868/api/v1/health
    # {"status":"ok","uptimeSeconds":3,"version":"0.1.0","engine":"native"}
    ```
 
-4. 打开 `http://<局域网 IP>:8080`。
+4. 打开 `http://<局域网 IP>:6868`。
 
 使用本地构建的镜像：`docker build -t abdm-server:local .`，然后按
 `docker-compose.yml` 顶部注释里的 override 方式把 `image` 指向 `abdm-server:local`。
@@ -81,7 +84,7 @@ AB Download Manager 作为后端引擎。
 `engine-abdm` 适配层，还需要 JDK 25（上游固定 `jvm.toolchain=25`）和 Android SDK，
 并先用 `bash scripts/build-abdm-bridge.sh` 导出上游运行时（见下文）。
 
-后端（默认 `native` 引擎，端口 8080）：
+后端（默认 `native` 引擎，端口 6868）：
 
 ```bash
 # Linux / macOS
@@ -91,7 +94,7 @@ AB Download Manager 作为后端引擎。
 .\gradlew.bat :server:app:run
 ```
 
-前端开发服务器（Vite，默认 5173，代理到 8080）：
+前端开发服务器（Vite，默认 5173，代理到 6868）：
 
 ```bash
 cd web
@@ -120,7 +123,7 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP/WebSocket 监听端口 |
+| `PORT` | `6868` | HTTP/WebSocket 监听端口 |
 | `ABDM_CONFIG_DIR` | `/config` | SQLite 数据库与运行期状态目录（必须可写） |
 | `ABDM_DOWNLOAD_ROOT` | `/downloads` | 下载根目录，同时是路径安全边界（必须可写） |
 | `ABDM_AUTH_MODE` | `none` | `none` 或 `token`；`none` 时启动会打印醒目告警 |
@@ -172,14 +175,14 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 
 本项目定位是**局域网自托管**，不是公网服务。
 
-- **默认 `AUTH_MODE=none`**：任何能访问 8080 端口的人都能操作下载任务，启动时会打印告警。
+- **默认 `AUTH_MODE=none`**：任何能访问 6868 端口的人都能操作下载任务，启动时会打印告警。
   只要不是完全可信的网段，就设置 `AUTH_MODE=token` + 足够长的随机 `ABDM_AUTH_TOKEN`。
 - **不要直接暴露到公网**。需要远程访问时，使用以下任一方式：
   - Tailscale / WireGuard 等私有网络（推荐，无需开放端口）；
   - 反向代理（Caddy / Nginx）挂 TLS + HTTP Basic 或 `AUTH_MODE=token`，并且只监听内网地址。
 - **路径安全**：所有可写路径都经 `PathGuard` 归一化并校验必须落在 `downloadRoot` 之内，
   `../` 穿越与绝对路径逃逸一律返回 `PATH_OUTSIDE_DOWNLOAD_ROOT`；`/config` 不可通过 API 访问。
-- **容器最小权限**：镜像以非 root 用户 `abdm`（uid 1000）运行，只暴露 8080，
+- **容器最小权限**：镜像以非 root 用户 `abdm`（uid 1000）运行，只暴露 6868，
   运行期不含 Node/npm/Gradle/源码。
 - **单写者**：SQLite 采用 WAL，`/config` 目录同时只能被一个服务实例使用。
 - **令牌不进日志**：`ABDM_AUTH_TOKEN` 由环境注入，不要写进 `docker-compose.yml` 提交到仓库。
@@ -255,8 +258,8 @@ npm run build          # 产出 web/dist
 
 ```bash
 docker build -t abdm-server:local .
-docker run --rm -p 8080:8080 -v "$PWD/config:/config" -v /mnt/downloads:/downloads abdm-server:local
-curl -fsS http://127.0.0.1:8080/api/v1/health
+docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloads abdm-server:local
+curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
 CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker / abdm-compat）、
@@ -274,7 +277,7 @@ CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker / abdm-c
 # 1) 起一个支持 Range 的本地文件服务器（可加 --throttle 限速，便于观察/暂停）
 node scripts/test-http-server.mjs ./big.bin 9100 --throttle 262144
 
-# 2) 起服务（默认端口 8080，或按需指定）
+# 2) 起服务（默认端口 6868，或按需指定）
 ./gradlew :server:app:fatJar
 java -jar server/app/build/libs/abdm-server-0.1.0-all.jar
 

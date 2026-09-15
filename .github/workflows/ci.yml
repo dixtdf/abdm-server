@@ -144,12 +144,12 @@ jobs:
           mkdir -p .ci-config .ci-downloads
           chmod -R 777 .ci-config .ci-downloads
           docker run -d --name abdm-smoke \
-            -p 8080:8080 \
+            -p 6868:6868 \
             -v "$PWD/.ci-config:/config" \
             -v "$PWD/.ci-downloads:/downloads" \
             abdm-server:ci
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/api/v1/health; then
+            if curl -fsS http://127.0.0.1:6868/api/v1/health; then
               echo
               echo "health probe ok after ${i}s"
               docker rm -f abdm-smoke
