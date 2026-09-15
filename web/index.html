@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Self-hosted download manager web UI." />
+    <title>Download Manager</title>
+    <script>
+      // Applies persisted UI preferences before first paint so the shell never flashes.
+      ;(function () {
+        try {
+          var theme = localStorage.getItem('ui.theme') || 'system'
+          var dark =
+            theme === 'dark' ||
+            (theme === 'system' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+          var locale = localStorage.getItem('ui.locale')
+          if (!locale || locale === 'system') {
+            locale = /^zh/i.test(navigator.language || '') ? 'zh-CN' : 'en-US'
+          }
+          document.documentElement.lang = locale
+        } catch (error) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

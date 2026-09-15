@@ -1,0 +1,70 @@
+# =============================================================================
+# abdm-server — single-service compose file.
+#
+# Create a .env next to this file (compose reads it for interpolation):
+#   IMAGE_OWNER=<your-github-owner>
+#   IMAGE_TAG=latest                 # or edge, v0.1.0, ...
+#   DOWNLOAD_HOST_PATH=/mnt/downloads
+#   AUTH_MODE=none                   # none | token
+#   AUTH_TOKEN=                      # only when AUTH_MODE=token
+#
+#   docker compose up -d
+#   curl http://127.0.0.1:8080/api/v1/health
+#
+# Pulls the published image:
+#   image: ghcr.io/<IMAGE_OWNER>/abdm-server:<IMAGE_TAG>
+#
+# --- switching to a locally built image --------------------------------------
+#   1. docker build -t abdm-server:local .
+#   2. in .env:  IMAGE_OWNER=abdm-server  IMAGE_TAG=local  (or any local tag)
+#   3. docker compose up -d --force-recreate
+#   With `IMAGE_OWNER=abdm-server` the resolved image becomes
+#   `ghcr.io/abdm-server/abdm-server:local`, which does not exist upstream, so
+#   compose will use your local tag once you also set:
+#     image: abdm-server:local      # <- or just uncomment the override below
+#
+#   The simplest local override is a `docker-compose.override.yml`:
+#     services:
+#       downloader:
+#         image: abdm-server:local
+#         build:
+#           context: .
+# =============================================================================
+
+services:
+  downloader:
+    # OWNER/IMAGE are placeholders resolved from .env (compose interpolation).
+    image: ghcr.io/${IMAGE_OWNER:-OWNER}/abdm-server:${IMAGE_TAG:-latest}
+    container_name: ${CONTAINER_NAME:-abdm-server}
+    restart: unless-stopped
+
+    ports:
+      - "${PORT:-8080}:8080"
+
+    volumes:
+      # SQLite database, settings and logs. Must be writable by uid 1000.
+      - ./config:/config
+      # Payload directory. Change the host side to wherever your disks live.
+      - ${DOWNLOAD_HOST_PATH:-/mnt/downloads}:/downloads
+
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # none | token — with `token` set ABDM_AUTH_TOKEN below.
+      ABDM_AUTH_MODE: ${AUTH_MODE:-none}
+      ABDM_AUTH_TOKEN: ${AUTH_TOKEN:-}
+      # native | abdm
+      ABDM_ENGINE: ${ENGINE:-native}
+      ABDM_LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    # SQLite in WAL mode is single-writer; one server per data directory.
+    deploy:
+      resources:
+        limits:
+          memory: 1g

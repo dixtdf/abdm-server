@@ -1,0 +1,230 @@
+name: CI
+
+# Continuous integration for abdm-server.
+#   backend     — Gradle build + unit tests (stub adapter, no Android SDK)
+#   frontend    — npm ci, i18n gate, lint, typecheck, tests, production build
+#   docker      — image build with a real Dockerfile check, pushed nowhere
+#   abdm-compat — compiles the adapter against the pinned upstream submodule;
+#                 only runs on main / manual dispatch because it needs the
+#                 Android SDK that the ubuntu runner image ships with.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Superseded pushes/PR updates cancel their predecessors.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+  ABDM_SUBMODULE: third_party/ab-download-manager
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Kotlin / JVM
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Kotlin / JVM 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      # abdm.enabled=false keeps CI free of any Android SDK requirement; the
+      # adapter module compiles its stub and the server uses the native engine.
+      - name: Build and test
+        run: ./gradlew --no-daemon build -Pabdm.enabled=false
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Vue 3 + Vite
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (Vue 3 + Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Hard gate: every errors.<CODE> from docs/api.md must exist in every
+      # locale file (scripts/check-i18n.mjs).
+      - name: Validate locales
+        run: npm run i18n:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Container image — built, never pushed.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          # amd64 only: `load: true` cannot import a multi-platform manifest.
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: abdm-server:ci
+          cache-from: type=gha,scope=docker-ci
+          cache-to: type=gha,mode=max,scope=docker-ci
+
+      - name: Smoke-test the image
+        run: |
+          set -euo pipefail
+          # The container runs as uid 1000 (`abdm`); bind mounts are root-owned by
+          # default, so pre-create them and relax the mode, otherwise SQLite
+          # cannot create /config/database.sqlite and the probe never goes green.
+          mkdir -p .ci-config .ci-downloads
+          chmod -R 777 .ci-config .ci-downloads
+          docker run -d --name abdm-smoke \
+            -p 8080:8080 \
+            -v "$PWD/.ci-config:/config" \
+            -v "$PWD/.ci-downloads:/downloads" \
+            abdm-server:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health; then
+              echo
+              echo "health probe ok after ${i}s"
+              docker rm -f abdm-smoke
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "health probe never became ready" >&2
+          docker logs abdm-smoke || true
+          docker rm -f abdm-smoke || true
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Upstream adapter compatibility. This is the only job that leaves JDK 17:
+  # exporting the upstream runtime needs JDK 25 (upstream pins jvm.toolchain=25)
+  # and an Android SDK to configure its KMP/android target. The ubuntu-latest
+  # image already ships the SDK.
+  # ---------------------------------------------------------------------------
+  abdm-compat:
+    name: ABDM adapter compatibility
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      # Runner images pre-install the Android SDK; ANDROID_HOME/ANDROID_SDK_ROOT
+      # are usually already exported. Fall back to the documented path.
+      - name: Locate Android SDK
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$sdk" ]; then
+            echo "::error::Android SDK not found at $sdk — the abdm-compat job needs it"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "using Android SDK at $sdk"
+
+      - name: Verify the pinned submodule
+        run: bash scripts/check-abdm.sh
+
+      # The adapter compiles against the upstream runtime exported into
+      # third_party/abdm-dist. If those jars are tracked, reuse them; otherwise
+      # export them here (that step needs JDK 25 because upstream pins
+      # jvm.toolchain=25, plus the Android SDK located above).
+      - name: Check the exported bridge
+        id: bridge
+        run: |
+          set -euo pipefail
+          if compgen -G "third_party/abdm-dist/*.jar" > /dev/null; then
+            echo "exported=true" >> "$GITHUB_OUTPUT"
+            echo "bridge jars already present, skipping the export"
+          else
+            echo "exported=false" >> "$GITHUB_OUTPUT"
+            echo "bridge jars missing, they will be exported"
+          fi
+
+      - name: Set up JDK 25 for the bridge export
+        if: steps.bridge.outputs.exported == 'false'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Export the ABDM bridge
+        if: steps.bridge.outputs.exported == 'false'
+        run: bash scripts/build-abdm-bridge.sh
+
+      # Back to 17 for the adapter build itself (server toolchain).
+      - name: Restore JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # AbdmCompatibilityTest asserts every upstream capability the adapter
+      # depends on (see docs/upstream.md). It is network dependent and only runs
+      # with -Pabdm.enabled=true.
+      - name: Compatibility test
+        run: ./gradlew --no-daemon -Pabdm.enabled=true :server:engine-abdm:test

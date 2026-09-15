@@ -1,0 +1,61 @@
+// ---------------------------------------------------------------------------
+// ABDM bridge: exports the AB Download Manager desktop runtime.
+//
+// Usage (from the submodule directory, never modifying it):
+//
+//   ./gradlew :downloader:core:desktopJar --init-script ../../scripts/abdm-bridge.init.gradle
+//
+// with ABDM_DIST_DIR pointing at third_party/abdm-dist.
+//
+// The task copies `core-desktop.jar` plus its desktop runtime classpath into the
+// dist directory, which is what `:server:engine-abdm` compiles against when
+// `-Pabdm.enabled=true`. Upstream stays untouched and our build only needs a
+// plain JVM classpath.
+//
+// Written in Groovy on purpose: init scripts are evaluated very early and the
+// dynamic typing keeps this working across Gradle/Kotlin plugin versions (the
+// upstream build runs on Gradle 9.x, this project on 8.13). The closure is also
+// invoked for every *included* build, hence the parent guard.
+// ---------------------------------------------------------------------------
+
+gradle.projectsEvaluated { g ->
+    if (g.parent != null) {
+        return
+    }
+    def coreProject = g.rootProject.findProject(":downloader:core")
+    if (coreProject == null) {
+        return
+    }
+
+    def submoduleRoot = g.rootProject.projectDir
+    def distDir = new File(
+        System.getenv("ABDM_DIST_DIR") ?: new File(submoduleRoot, "../abdm-dist").canonicalPath
+    )
+    def runtimeClasspath = coreProject.configurations.findByName("desktopRuntimeClasspath")
+        ?: coreProject.configurations.findByName("desktopRuntimeOnly")
+
+    coreProject.tasks.register("exportAbdmDist", Copy) { task ->
+        task.group = "abdm"
+        task.description = "Export the ABDM desktop runtime into third_party/abdm-dist"
+        task.dependsOn(coreProject.tasks.named("desktopJar"))
+        task.from(coreProject.tasks.named("desktopJar"))
+        if (runtimeClasspath != null) {
+            task.from(runtimeClasspath)
+        }
+        task.into(distDir)
+        // Exactly one version of the shared runtime libraries must end up on the
+        // server classpath: the server declares those itself (gradle/libs.versions.toml).
+        task.exclude(
+            "kotlin-stdlib-*.jar",
+            "kotlin-stdlib-jdk*.jar",
+            "kotlin-reflect-*.jar",
+            "annotations-*.jar",
+            "kotlinx-coroutines-*.jar",
+            "kotlinx-serialization-*.jar"
+        )
+        task.doLast {
+            def count = distDir.listFiles()?.length ?: 0
+            println("[abdm-bridge] exported ${count} file(s) to ${distDir.absolutePath}")
+        }
+    }
+}

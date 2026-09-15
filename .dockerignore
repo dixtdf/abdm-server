@@ -1,0 +1,63 @@
+# =============================================================================
+# Docker build context filter.
+#
+# Keep this list in sync with .gitignore: the image is built from a working
+# copy, so anything generated locally must be excluded or it silently shadows
+# the image's own build output.
+# =============================================================================
+
+# --- VCS ---------------------------------------------------------------------
+.git
+.gitignore
+.github
+
+# --- build outputs -----------------------------------------------------------
+build/
+**/build/
+out/
+bin/
+dist/
+*.class
+
+# --- Gradle ------------------------------------------------------------------
+.gradle/
+**/.gradle/
+
+# --- Node / web --------------------------------------------------------------
+node_modules/
+**/node_modules/
+web/dist/
+web/.vite/
+web/coverage/
+npm-debug.log*
+
+# --- runtime data (never bake user state into an image) ----------------------
+config/
+data/
+downloads/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# --- docs / editor / OS noise ------------------------------------------------
+docs/
+*.md
+!README.md
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- upstream submodule + bridge -------------------------------------------
+# Only needed when building with -Pabdm.enabled=true: the sources are under
+# third_party/ab-download-manager and the exported runtime jars under
+# third_party/abdm-dist. The default image build compiles the stub and must not
+# pay for either in its context.
+third_party/
+
+# --- local secrets -----------------------------------------------------------
+# Everything, including .env: compose interpolates it on the host, and baking
+# it into a layer is exactly the accident this file exists to prevent.
+.env
+.env.*

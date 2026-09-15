@@ -1,0 +1,179 @@
+name: Upstream check
+
+# Weekly (and on demand) check of the pinned AB Download Manager release.
+# When upstream publishes something newer than the pin recorded in
+# docs/upstream.md, this opens a PR that only moves the submodule pointer and
+# the matching pin block — never code. The PR is labelled `abdm-compat` and must
+# never be auto-merged: AbdmCompatibilityTest has to pass first, because a new
+# upstream tag may rename or drop an API the adapter relies on.
+on:
+  schedule:
+    # Mondays 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-check
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: amir1376/ab-download-manager
+  SUBMODULE: third_party/ab-download-manager
+  PIN_DOC: docs/upstream.md
+  LABEL: abdm-compat
+
+jobs:
+  check:
+    name: Compare pin with the latest upstream release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Read the recorded pin
+        id: pin
+        run: |
+          set -euo pipefail
+          version="$(sed -n -E 's/^UPSTREAM_VERSION=(.*)$/\1/p' "$PIN_DOC" | head -n1)"
+          commit="$(sed -n -E 's/^UPSTREAM_COMMIT=(.*)$/\1/p' "$PIN_DOC" | head -n1)"
+          if [ -z "$version" ] || [ -z "$commit" ]; then
+            echo "::error::no UPSTREAM_VERSION/UPSTREAM_COMMIT pin block in $PIN_DOC"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "pinned: $version ($commit)"
+
+      - name: Resolve the latest upstream release tag
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq '.tag_name')"
+          if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+            echo "::error::could not resolve the latest release of ${UPSTREAM_REPO}"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "latest upstream release: $tag"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          set -euo pipefail
+          pinned="${{ steps.pin.outputs.version }}"
+          latest="${{ steps.upstream.outputs.tag }}"
+          pinned_n="${pinned#v}"
+          latest_n="${latest#v}"
+          highest="$(printf '%s\n%s\n' "$pinned_n" "$latest_n" | sort -V | tail -n1)"
+          if [ "$pinned_n" = "$latest_n" ]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "pin is current ($pinned)"
+          elif [ "$highest" = "$latest_n" ]; then
+            echo "update=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::upstream $latest is newer than the pin $pinned"
+          else
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::the pin ($pinned) is ahead of the latest release ($latest) - nothing to do"
+          fi
+
+      - name: Bump the submodule pointer
+        if: steps.compare.outputs.update == 'true'
+        id: bump
+        run: |
+          set -euo pipefail
+          latest="${{ steps.upstream.outputs.tag }}"
+          git -C "$SUBMODULE" fetch --tags --prune origin
+          git -C "$SUBMODULE" checkout --detach "$latest"
+          new_commit="$(git -C "$SUBMODULE" rev-parse HEAD)"
+          new_date="$(git -C "$SUBMODULE" show -s --format=%cs "$new_commit")"
+
+          sed -i -E "s|^UPSTREAM_VERSION=.*|UPSTREAM_VERSION=${latest}|" "$PIN_DOC"
+          sed -i -E "s|^UPSTREAM_COMMIT=.*|UPSTREAM_COMMIT=${new_commit}|" "$PIN_DOC"
+          sed -i -E "s|^UPSTREAM_PINNED_DATE=.*|UPSTREAM_PINNED_DATE=${new_date}|" "$PIN_DOC"
+
+          echo "commit=$new_commit" >> "$GITHUB_OUTPUT"
+          echo "date=$new_date" >> "$GITHUB_OUTPUT"
+          git status --short
+
+      - name: Open the pull request
+        if: steps.compare.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest="${{ steps.upstream.outputs.tag }}"
+          branch="chore/abdm-${latest}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$SUBMODULE" "$PIN_DOC"
+          git commit -m "chore: update AB Download Manager to ${latest}"
+          git push --force-with-lease origin "HEAD:refs/heads/${branch}"
+
+          # The label has to exist before it can be attached. A failure here
+          # only means it already exists, which is fine.
+          gh label create "$LABEL" \
+            --color FBCA04 \
+            --description "Touches the AB Download Manager adapter or submodule" \
+            >/dev/null 2>&1 || true
+
+          # Quoted heredoc: the body is Markdown with backticks and code fences,
+          # so nothing may be shell-expanded. GitHub substitutes ${{ }} before
+          # the shell ever sees this script.
+          cat > pr-body.md <<'PRBODY'
+          Automated weekly upstream check, see `.github/workflows/upstream-check.yml`.
+
+          | | |
+          | --- | --- |
+          | Previous pin | `${{ steps.pin.outputs.version }}` (`${{ steps.pin.outputs.commit }}`) |
+          | New release | `${{ steps.upstream.outputs.tag }}` (`${{ steps.bump.outputs.commit }}`) |
+          | Upstream commit date | `${{ steps.bump.outputs.date }}` |
+
+          This PR only moves the submodule pointer plus the matching pin block in
+          `${{ env.PIN_DOC }}`. It contains no source changes.
+
+          > **Do not merge before the compatibility test passes.**
+          >
+          > `AbdmCompatibilityTest` compiles the adapter against upstream and
+          > asserts that every capability listed in `${{ env.PIN_DOC }}` still
+          > exists. Run it against this branch:
+          >
+          > ```bash
+          > bash scripts/check-abdm.sh
+          > ./gradlew -Pabdm.enabled=true :server:engine-abdm:test
+          > ```
+          >
+          > The `abdm-compat` CI job on `main` covers this as well, but a new
+          > upstream tag can rename or drop APIs, so the test must be seen
+          > passing on this branch too.
+
+          This PR is never auto-merged; a human review is required.
+          PRBODY
+
+          gh pr create \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "${branch}" \
+            --title "chore: update AB Download Manager to ${latest}" \
+            --body-file pr-body.md \
+            --label "$LABEL"
+
+      - name: Summary
+        if: steps.compare.outputs.update != 'true'
+        run: |
+          {
+            echo "### Upstream check"
+            echo ""
+            echo "- pinned: ${{ steps.pin.outputs.version }}"
+            echo "- latest: ${{ steps.upstream.outputs.tag }}"
+            echo ""
+            echo "No update needed."
+          } >> "$GITHUB_STEP_SUMMARY"

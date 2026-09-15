@@ -1,0 +1,124 @@
+/**
+ * Design tokens. This is the ONLY file allowed to contain literal colours.
+ * Components consume `var(--token)` exclusively.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --background: #f5f6fa;
+  --surface: #ffffff;
+  --surface-secondary: #f0f1f6;
+  --surface-elevated: #ffffff;
+  --overlay: rgba(20, 22, 35, 0.45);
+
+  /* Text */
+  --text-primary: #1b1d28;
+  --text-secondary: #6b7080;
+  --text-muted: #9ba1b4;
+  --text-on-primary: #ffffff;
+
+  /* Brand + semantics */
+  --primary: #4f5bd5;
+  --primary-hover: #4049c0;
+  --primary-foreground: #ffffff;
+  --primary-soft: rgba(79, 91, 213, 0.12);
+  --primary-soft-hover: rgba(79, 91, 213, 0.18);
+
+  --success: #2e9e5b;
+  --success-soft: rgba(46, 158, 91, 0.14);
+  --warning: #e0a020;
+  --warning-soft: rgba(224, 160, 32, 0.16);
+  --error: #d64545;
+  --error-soft: rgba(214, 69, 69, 0.14);
+  --error-hover: #bf3a3a;
+  --muted-soft: rgba(107, 112, 128, 0.14);
+  --neutral-soft: rgba(27, 29, 40, 0.06);
+
+  --border: #e3e5ee;
+  --border-strong: #d2d5e2;
+
+  /* Shape */
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Depth */
+  --shadow-card: 0 1px 2px rgba(20, 22, 35, 0.06), 0 6px 18px rgba(20, 22, 35, 0.06);
+  --shadow-card-hover: 0 2px 4px rgba(20, 22, 35, 0.08), 0 12px 28px rgba(20, 22, 35, 0.1);
+  --shadow-dialog: 0 24px 60px rgba(15, 17, 28, 0.28);
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Layout */
+  --sidebar-width: 232px;
+  --drawer-width: 420px;
+  --header-height: 64px;
+
+  /* Type */
+  --font-sans: 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+
+  /* Sheen animation used by ProgressBar */
+  --progress-height: 8px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --background: #16171d;
+  --surface: #1e2029;
+  --surface-secondary: #262936;
+  --surface-elevated: #262936;
+  --overlay: rgba(6, 7, 12, 0.68);
+
+  --text-primary: #eceef6;
+  --text-secondary: #9ba1b4;
+  --text-muted: #7c8397;
+  --text-on-primary: #12131a;
+
+  --primary: #6c78ff;
+  --primary-hover: #8590ff;
+  --primary-foreground: #12131a;
+  --primary-soft: rgba(108, 120, 255, 0.18);
+  --primary-soft-hover: rgba(108, 120, 255, 0.26);
+
+  --success: #43c07a;
+  --success-soft: rgba(67, 192, 122, 0.18);
+  --warning: #f0b440;
+  --warning-soft: rgba(240, 180, 64, 0.18);
+  --error: #ff6b6b;
+  --error-soft: rgba(255, 107, 107, 0.18);
+  --error-hover: #ff8585;
+  --muted-soft: rgba(155, 161, 180, 0.16);
+  --neutral-soft: rgba(236, 238, 246, 0.07);
+
+  --border: #2e3242;
+  --border-strong: #3b4055;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.32);
+  --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.45), 0 16px 34px rgba(0, 0, 0, 0.42);
+  --shadow-dialog: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
