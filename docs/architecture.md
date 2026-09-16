@@ -196,8 +196,8 @@ guarantee about who is on the LAN.
 - The image is built for `linux/amd64` and `linux/arm64` from the same
   Dockerfile via buildx plus QEMU by the manual release workflow
   (`.github/workflows/release-manual.yml`), which also tags the commit and creates
-  the GitHub Release. `ci.yml` separately builds an amd64 image and smoke-tests its
-  health endpoint, so a broken Dockerfile fails before a release is attempted.
+  the GitHub Release. That workflow runs the backend and frontend checks first, so a
+  broken build never gets tagged.
 - Nothing in the JVM stack is architecture specific: the fat jar is pure JVM
   bytecode, and `sqlite-jdbc` ships both the amd64 and aarch64 native bundles,
   so the same jar runs on a NAS, an x86 server or an ARM SBC.

@@ -265,10 +265,9 @@ docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloa
 curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
-CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker，每次推送与 PR）、
-`release-manual.yml`（手动输入版本号发版，见「发布」章节）、
-`abdm-compat.yml`（ABDM 适配层兼容性预警，每周 + 手动 + 改动 engine-abdm 时）、
-`upstream-check.yml`（每周检查上游新版本并开 PR）、`codeql.yml`（代码扫描）。
+CI 只保留 `.github/workflows/release-manual.yml`：手动输入版本号，验证 → 构建 →
+推多架构镜像 → 打 tag → 发 Release（失败不会留下 tag）。同样的检查可以本地跑：
+`./gradlew build`，`cd web && npm run i18n:check && npm run lint && npm run typecheck && npm run test`。
 
 ### 本地验收（端到端）
 

@@ -285,11 +285,10 @@ docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloa
 curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
-CI workflows: `.github/workflows/ci.yml` (backend / frontend / docker, on every push and PR),
-`release-manual.yml` (manual release with a version input, see "Releasing"),
-`abdm-compat.yml` (adapter compatibility canary: weekly, on demand, and when
-`server/engine-abdm/` changes), `upstream-check.yml` (weekly upstream check that opens a
-PR) and `codeql.yml`.
+CI is just `.github/workflows/release-manual.yml`: type a version and it verifies,
+builds, pushes the multi-arch image, tags and creates the release (a failure never
+leaves a tag behind). Run the same checks locally with `./gradlew build` and, in `web/`,
+`npm run i18n:check && npm run lint && npm run typecheck && npm run test`.
 
 ### Local end-to-end acceptance
 
