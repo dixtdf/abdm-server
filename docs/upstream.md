@@ -6,8 +6,7 @@ pinned upstream commit and adapts to it from a single module
 
 ## Pin
 
-Machine-readable — `scripts/check-abdm.sh`,
-`.github/workflows/upstream-check.yml` and `scripts/update-abdm.sh` read these
+Machine-readable — `scripts/check-abdm.sh` and `scripts/update-abdm.sh` read these
 lines, so keep the `KEY=value` shape exactly:
 
 ```
@@ -113,10 +112,9 @@ git commit -m "chore: update AB Download Manager to v1.10.5"
 Windows: run the scripts through Git Bash or WSL (`bash scripts/update-abdm.sh
 v1.10.5`) — they are Bash and rely on standard POSIX tools.
 
-The weekly `upstream-check.yml` workflow does steps 1 for you when GitHub
-reports a newer release: it opens a PR labelled `abdm-compat` whose title is
-`chore: update AB Download Manager to <tag>`. That PR is never auto-merged; step
-3 has to pass first.
+Updating is a local, deliberate step: run `scripts/update-abdm.sh <tag>` to move the
+pin, then step 3 (the compatibility test) before committing. There is no scheduled
+workflow for it — `update-abdm.sh` prints the upstream tag comparison for you.
 
 ## What to check: `AbdmCompatibilityTest`
 
