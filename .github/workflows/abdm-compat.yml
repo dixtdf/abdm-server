@@ -112,7 +112,18 @@ jobs:
 
       - name: Export the ABDM bridge
         if: steps.bridge.outputs.present == 'false'
-        run: bash scripts/build-abdm-bridge.sh
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if bash scripts/build-abdm-bridge.sh 2>&1 | tee "$log"; then
+            exit 0
+          fi
+          # Surface the tail of the failure as an annotation: the run log needs a
+          # token to read, annotations do not, and this step is the one that has
+          # historically been hard to diagnose.
+          escaped="$(tail -n 30 "$log" | sed -e 's/%/%25/g' -e 's/\r$//' | awk '{printf "%s%%0A", $0}')"
+          echo "::error::the ABDM bridge export failed. Last 30 lines:%0A${escaped}"
+          exit 1
 
       - name: Restore JDK 17
         uses: actions/setup-java@v4
