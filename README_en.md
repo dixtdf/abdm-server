@@ -40,10 +40,43 @@ download engine by default, and can switch to AB Download Manager as its backend
 
 ## Interface
 
-The repository deliberately **ships no screenshots**: the UI is built from `web/`
-(Vue 3 + Vite) and consists of the task list, live progress bars, history and settings.
-Every string comes from `web/src/locales/*.json`, so you can preview it locally with
-`npm run dev` instead of trusting pictures in the docs.
+<p align="center">
+  A clean web console with live progress, segmented connection management, history,
+  themes, and a bilingual interface.
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-en-downloads.png">
+        <img src="docs/images/ui-en-downloads.png" alt="Download task list" width="100%">
+      </a>
+      <br><sub><b>Downloads</b> · Monitor progress, speed, and connections live</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-en-download-details.png">
+        <img src="docs/images/ui-en-download-details.png" alt="Download task details" width="100%">
+      </a>
+      <br><sub><b>Task details</b> · Paths, status, and connections at a glance</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-en-connections.png">
+        <img src="docs/images/ui-en-connections.png" alt="Download connections and parts" width="100%">
+      </a>
+      <br><sub><b>Connections / parts</b> · Per-connection status and speed</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-en-settings.png">
+        <img src="docs/images/ui-en-settings.png" alt="Download manager settings" width="100%">
+      </a>
+      <br><sub><b>Settings</b> · Server configuration and web preferences in one place</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center"><sub>Click any image to view it at full size</sub></p>
 
 ---
 

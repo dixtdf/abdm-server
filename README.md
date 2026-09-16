@@ -35,9 +35,42 @@ AB Download Manager 作为后端引擎。
 
 ## 界面 Interface
 
-仓库有意**不附带截图**：界面由 `web/`（Vue 3 + Vite）构建，布局为任务列表 + 实时进度条 +
-历史记录 + 设置页，所有文案来自 `web/src/locales/*.json`，可直接在本地
-`npm run dev` 预览，无需依赖文档里的图片。
+<p align="center">
+  简洁的 Web 控制台，支持实时进度、分片连接管理、历史记录、主题与中英文切换。
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-zh-downloads.png">
+        <img src="docs/images/ui-zh-downloads.png" alt="下载任务列表" width="100%">
+      </a>
+      <br><sub><b>下载任务</b> · 实时查看进度、速度与连接数</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-zh-download-details.png">
+        <img src="docs/images/ui-zh-download-details.png" alt="下载任务详情" width="100%">
+      </a>
+      <br><sub><b>任务详情</b> · 路径、状态与连接数一目了然</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-zh-connections.png">
+        <img src="docs/images/ui-zh-connections.png" alt="下载连接和分片详情" width="100%">
+      </a>
+      <br><sub><b>连接 / 分片</b> · 逐连接展示下载状态与速度</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/ui-zh-settings.png">
+        <img src="docs/images/ui-zh-settings.png" alt="下载管理器设置" width="100%">
+      </a>
+      <br><sub><b>设置中心</b> · 服务端配置与网页偏好集中管理</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center"><sub>点击图片可查看完整尺寸</sub></p>
 
 ---
 
