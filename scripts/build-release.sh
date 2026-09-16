@@ -83,7 +83,9 @@ $(ls -1 "${DIST}" | sed 's/^/  /')
 SHA256SUMS:
 $(sed 's/^/  /' "${DIST}/SHA256SUMS")
 
-Next: create the tag and let .github/workflows/release.yml publish the
-multi-arch image plus the GitHub Release:
+Next: publish it. Either run the manual release workflow
+(GitHub -> Actions -> Release (manual), version ${VERSION}), which tags the commit,
+builds the multi-arch image and creates the GitHub Release - or push the tag
+yourself and create the release by hand (pushing a tag alone publishes nothing):
   git tag v${VERSION} && git push origin v${VERSION}
 EOF

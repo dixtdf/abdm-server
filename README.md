@@ -265,10 +265,10 @@ docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloa
 curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
-CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker / abdm-compat）、
-`docker.yml`（每次推送 main 发布 `:edge`，tag 发布正式镜像）、
+CI 工作流：`.github/workflows/ci.yml`（backend / frontend / docker，每次推送与 PR）、
 `release-manual.yml`（手动输入版本号发版，见「发布」章节）、
-`release.yml`（推送 tag 时发版）、`upstream-check.yml`（每周检查上游并开 PR）、`codeql.yml`。
+`abdm-compat.yml`（ABDM 适配层兼容性预警，每周 + 手动 + 改动 engine-abdm 时）、
+`upstream-check.yml`（每周检查上游新版本并开 PR）、`codeql.yml`（代码扫描）。
 
 ### 本地验收（端到端）
 
@@ -325,19 +325,15 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 ghcr.io/dixtdf/abdm-server:0.2.0     # 版本
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # push_latest=true 时
-ghcr.io/dixtdf/abdm-server:edge      # 每次推送 main 自动发布（docker.yml）
 tag: v0.2.0（打在 ref 指向的提交上）
 ```
 
 两点说明：
 
 1. tag 是**最后一步**创建的——验证或镜像构建失败不会留下半成品 tag。
-2. 由 `GITHUB_TOKEN` 推送的 tag 不会触发其他 workflow，所以 Release 由本流程自己创建。
-   如果你更习惯手动打 tag，效果等价：
-
-   ```bash
-   git tag v0.2.0 && git push origin v0.2.0   # 触发 release.yml
-   ```
+2. 镜像与 Release 都由这个流程负责，仓库里不再有"推送 tag 自动发版"的工作流；
+   手动 `git push origin v0.2.0` 只会创建一个 tag，不会发镜像也不会发 Release。
+   由 `GITHUB_TOKEN` 推送的 tag 不会触发其他 workflow，所以 Release 也由本流程自己创建。
 
 本地自检可用与环境无关的方式复核版本号确实进了产物：
 

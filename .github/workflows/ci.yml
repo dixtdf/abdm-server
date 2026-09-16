@@ -4,9 +4,10 @@ name: CI
 #   backend     — Gradle build + unit tests (stub adapter, no Android SDK)
 #   frontend    — npm ci, i18n gate, lint, typecheck, tests, production build
 #   docker      — image build with a real Dockerfile check, pushed nowhere
-#   abdm-compat — compiles the adapter against the pinned upstream submodule;
-#                 only runs on main / manual dispatch because it needs the
-#                 Android SDK that the ubuntu runner image ships with.
+#
+# The ABDM adapter compatibility canary (JDK 25 + Android SDK) is a separate
+# workflow, `.github/workflows/abdm-compat.yml`: it runs weekly instead of on every
+# push, so this file stays fast and dependency free.
 on:
   push:
     branches: [main]
@@ -161,83 +162,3 @@ jobs:
           docker logs abdm-smoke || true
           docker rm -f abdm-smoke || true
           exit 1
-
-  # ---------------------------------------------------------------------------
-  # Upstream adapter compatibility. This is the only job that leaves JDK 17:
-  # exporting the upstream runtime needs JDK 25 (upstream pins jvm.toolchain=25)
-  # and an Android SDK to configure its KMP/android target. The ubuntu-latest
-  # image already ships the SDK.
-  # ---------------------------------------------------------------------------
-  abdm-compat:
-    name: ABDM adapter compatibility
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    continue-on-error: false
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
-
-      # Runner images pre-install the Android SDK; ANDROID_HOME/ANDROID_SDK_ROOT
-      # are usually already exported. Fall back to the documented path.
-      - name: Locate Android SDK
-        run: |
-          set -euo pipefail
-          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          if [ ! -d "$sdk" ]; then
-            echo "::error::Android SDK not found at $sdk — the abdm-compat job needs it"
-            exit 1
-          fi
-          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
-          echo "using Android SDK at $sdk"
-
-      - name: Verify the pinned submodule
-        run: bash scripts/check-abdm.sh
-
-      # The adapter compiles against the upstream runtime exported into
-      # third_party/abdm-dist. If those jars are tracked, reuse them; otherwise
-      # export them here (that step needs JDK 25 because upstream pins
-      # jvm.toolchain=25, plus the Android SDK located above).
-      - name: Check the exported bridge
-        id: bridge
-        run: |
-          set -euo pipefail
-          if compgen -G "third_party/abdm-dist/*.jar" > /dev/null; then
-            echo "exported=true" >> "$GITHUB_OUTPUT"
-            echo "bridge jars already present, skipping the export"
-          else
-            echo "exported=false" >> "$GITHUB_OUTPUT"
-            echo "bridge jars missing, they will be exported"
-          fi
-
-      - name: Set up JDK 25 for the bridge export
-        if: steps.bridge.outputs.exported == 'false'
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Export the ABDM bridge
-        if: steps.bridge.outputs.exported == 'false'
-        run: bash scripts/build-abdm-bridge.sh
-
-      # Back to 17 for the adapter build itself (server toolchain).
-      - name: Restore JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # AbdmCompatibilityTest asserts every upstream capability the adapter
-      # depends on (see docs/upstream.md). It is network dependent and only runs
-      # with -Pabdm.enabled=true.
-      - name: Compatibility test
-        run: ./gradlew --no-daemon -Pabdm.enabled=true :server:engine-abdm:test

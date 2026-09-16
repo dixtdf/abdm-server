@@ -285,11 +285,11 @@ docker run --rm -p 6868:6868 -v "$PWD/config:/config" -v /mnt/downloads:/downloa
 curl -fsS http://127.0.0.1:6868/api/v1/health
 ```
 
-CI workflows: `.github/workflows/ci.yml` (backend / frontend / docker / abdm-compat),
-`docker.yml` (publishes `:edge` on every push to main and the release images on tags),
+CI workflows: `.github/workflows/ci.yml` (backend / frontend / docker, on every push and PR),
 `release-manual.yml` (manual release with a version input, see "Releasing"),
-`release.yml` (release when a tag is pushed), `upstream-check.yml` (weekly upstream check
-that opens a PR) and `codeql.yml`.
+`abdm-compat.yml` (adapter compatibility canary: weekly, on demand, and when
+`server/engine-abdm/` changes), `upstream-check.yml` (weekly upstream check that opens a
+PR) and `codeql.yml`.
 
 ### Local end-to-end acceptance
 
@@ -350,7 +350,6 @@ Produced artifacts:
 ghcr.io/dixtdf/abdm-server:0.2.0     # version
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # when push_latest=true
-ghcr.io/dixtdf/abdm-server:edge      # every push to main (docker.yml)
 tag: v0.2.0 (on the commit ref points at)
 ```
 
@@ -358,12 +357,10 @@ Two notes:
 
 1. The tag is created **last**, so a failed verification or image build never leaves a tag
    behind.
-2. A tag pushed with `GITHUB_TOKEN` does not trigger other workflows, which is why this
-   workflow also creates the release itself. Tagging by hand stays equivalent:
-
-   ```bash
-   git tag v0.2.0 && git push origin v0.2.0   # triggers release.yml
-   ```
+2. This workflow owns both the image and the release; there is no "release on tag push"
+   workflow any more, so pushing `v0.2.0` by hand only creates a tag - no image, no
+   release. A tag pushed with `GITHUB_TOKEN` does not trigger other workflows, which is
+   why this workflow also creates the release itself.
 
 To reproduce the version stamping locally:
 
