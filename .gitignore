@@ -47,3 +47,6 @@ Thumbs.db
 
 # Python packaging script scratch
 __pycache__/
+
+# Never commit the Chrome extension signing key
+*.pem

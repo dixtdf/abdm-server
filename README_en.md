@@ -371,10 +371,11 @@ Release.
 3. The job then: validates the version and refuses an existing tag → checks out `ref`
    (with submodules) → runs the backend `build`, frontend gates and Chrome extension tests
    → builds the versioned fat jar (verified with `java -jar server.jar --print-version`)
-   → packages the extension ZIP and writes `SHA256SUMS` → pushes the multi-arch image
+   → packages the extension ZIP and signed CRX3 and writes `SHA256SUMS` → pushes the multi-arch image
    (`linux/amd64` + `linux/arm64`) → creates the tag and GitHub Release with
-   `server.jar`, `docker-compose.yml`, `abdm-server-chrome-extension-<version>.zip` and
-   `SHA256SUMS` attached.
+   `server.jar`, `docker-compose.yml`, `abdm-server-chrome-extension-<version>.zip/.crx` and
+   `SHA256SUMS` attached. Before a manual release, set the Actions secret
+   `CHROME_EXTENSION_KEY_B64` to the Base64-encoded PEM private key matching the extension's `manifest.key`.
 
 Produced artifacts:
 

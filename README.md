@@ -351,9 +351,9 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 
 3. 流程依次执行：校验版本与重名 tag → checkout `ref`（含子模块）→ 后端 `build`、
    前端 `i18n:check / lint / typecheck / test` 与 Chrome 扩展测试 → 构建带版本号的 fat jar（`-Pproject.version=`，
-   并用 `java -jar server.jar --print-version` 复核）→ 打包扩展 ZIP、生成 `SHA256SUMS` →
+   并用 `java -jar server.jar --print-version` 复核）→ 打包扩展 ZIP 和签名 CRX、生成 `SHA256SUMS` →
    推送多架构镜像（`linux/amd64` + `linux/arm64`）→ 打 tag → 创建 Release
-   （附件 `server.jar`、`docker-compose.yml`、`abdm-server-chrome-extension-<版本>.zip`、`SHA256SUMS`）。
+   （附件 `server.jar`、`docker-compose.yml`、`abdm-server-chrome-extension-<版本>.zip/.crx`、`SHA256SUMS`）。发布前需设置 Actions secret `CHROME_EXTENSION_KEY_B64`（与扩展 `manifest.key` 配对的 PEM 私钥的 Base64 内容）。
 
 产物：
 

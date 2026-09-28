@@ -27,5 +27,5 @@ test("manifest version and localized metadata are valid", () => {
   assert.ok(read("../_locales/en/messages.json").sendLinkToAbdm);
   const digest = createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest();
   const id = [...digest.subarray(0, 16)].map((byte) => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15))).join("");
-  assert.equal(id, "cbmonlpfkenpjmbampjcachcieebjopn");
+  assert.equal(id, "pjmoncdpljccobiiaeckifkejellfaph");
 });

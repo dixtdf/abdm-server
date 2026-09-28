@@ -67,3 +67,4 @@ third_party/abdm-dist/*
 # it into a layer is exactly the accident this file exists to prevent.
 .env
 .env.*
+*.pem

@@ -3,7 +3,7 @@
   "name": "__MSG_extensionName__",
   "description": "__MSG_extensionDescription__",
   "version": "1.0.1",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3qxiUJCOKzMg/DBqt/uaBPII6iyg1rZgW9mqE8wCOpXxFjC6uY2/qJouQWuFitH6cDhxAr+qmVSJs1AP1t5LnYvsiTfBu4ANluA64tZn982tSlZoCCS9aeXMEfcbZWpX7B6tEwZmQkb3HCw9eh8gPbmEoxrBk81p0B47uNT8Iyp+7oYMzc9wl5imasn08/WDlVOyAKSJ2UYERDDqNevHbJ4KG5LotVE7ETCCGMrOOW96sWXkzDEAl2Vvnz1e4h6Ox6eirO3oBYNh3DuoYfFGS0RJWntPcTDBdHXjNvzPqPOF1dbVlZj4xjG8fC1OrJMKm86MjtCrX+Ibye4/G7P1EQIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAviU6J//+0GLLv8IdCYk7aNXNw1K0gULbJ3nUEvRn+2Bhtm++7vPI17YbNW6OFjYzYkBj86CfXtaROe15aEEGw+QLxTih0Mr07w49gvA/0sHHWO//JufNML1NO0LlyAq/RjLLBO3vkjEuUgQOnv7IwZXd8/Le8zElpyuwUhFcKs6UZscuX85+/J0PW4BLdypdtdwoYXK+1K7GxZU1MWWHYsNjWc4x0y/waIkYnGW36hd/DQRYI02cpb/e+1lQ7nwpfuD9ybm+kJntG3BGUmo3na/+VDvXe/yvhsOFDFwjymzYJ8MEwkfD4c7M+Qj/VlwrEKB4xjA0Kvc29VRgpXD+VQIDAQAB",
   "default_locale": "en",
   "minimum_chrome_version": "119",
   "incognito": "split",

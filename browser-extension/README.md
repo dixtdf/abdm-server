@@ -13,7 +13,7 @@
 ## 检查 Chrome 账号同步
 
 1. 两台设备都要在 Chrome 登录同一账号，并在同步设置中启用“扩展程序”。**解压加载的扩展本体仍需在另一台设备手动安装。**
-2. 在两台设备的扩展设置页检查“扩展 ID”一致，本项目固定 ID 为 `cbmonlpfkenpjmbampjcachcieebjopn`。先前未带固定 `manifest.key` 的开发版可能是另一个 ID；安装新版前请记下旧 IP、端口和 Token，必要时重新填写。
+2. 在两台设备的扩展设置页检查“扩展 ID”一致。本项目从 1.0.1 起使用新的签名密钥，固定 ID 为 `pjmoncdpljccobiiaeckifkejellfaph`。旧版 ID `cbmonlpfkenpjmbampjcachcieebjopn` 的同步设置不会自动转移；安装新版前请记下旧 IP、端口和 Token，必要时重新填写。
 3. 设备 A 在扩展设置页点击“生成测试码”；设备 B 打开相同扩展的设置页，点击“读取测试码”。两端代码与时间一致，证明 `chrome.storage.sync` 中的测试项已跨设备到达。单机读到测试码只证明本地写入成功。
 4. 在设备 B 比较服务器地址、接管模式和扩展名列表，并点击“测试连接”。它也成功时，Token 与服务器设置已可用。
 5. 如果测试码未到达，打开 `chrome://sync-internals`，看同步状态与扩展设置相关错误；再检查两边的账号、同步开关和扩展 ID。
@@ -29,11 +29,14 @@
 
 ## 开发验证
 
-发布打包只包含运行所需文件，ZIP 内根目录就是 `manifest.json`。在仓库根目录运行：
+发布打包只包含运行所需文件，ZIP 内根目录就是 `manifest.json`。CRX3 由 Chrome 用私钥签名；构建它不需要 Chrome 开发者账号。签名私钥必须与 `manifest.key` 配对，否则扩展 ID 会改变，原有同步设置不会自动转移。私钥不要提交到仓库。在仓库根目录运行：
 
 ```powershell
 python scripts/package-browser-extension.py 1.0.1 dist
+python scripts/package-browser-extension.py 1.0.1 dist --crx-key C:\path\to\extension.pem
 ```
+
+手动发布前，在 GitHub 仓库的 Actions secrets 中设置 `CHROME_EXTENSION_KEY_B64`，内容为 PEM 私钥文件的 Base64 编码。发布流程会校验它与 `manifest.key` 一致，并把 ZIP 和 CRX 都加入 Release；未配置或密钥不匹配时会停止发布。Chrome 不一定允许直接安装商店外 CRX；普通手动安装可解压 ZIP 并使用开发者模式。
 
 ```powershell
 cd browser-extension

@@ -9,6 +9,7 @@
 #   dist/server.jar            fat jar with the pinned ABDM engine
 #   dist/docker-compose.yml    the compose file shipped with the release
 #   dist/abdm-server-chrome-extension-<version>.zip
+#   dist/abdm-server-chrome-extension-<version>.crx (when signing key is set)
 #   dist/SHA256SUMS            checksums of all release files above
 #
 # Always builds the pinned upstream ABDM bridge.
@@ -64,23 +65,31 @@ cp docker-compose.yml "${DIST}/docker-compose.yml"
 
 step "Chrome extension: tests and package"
 ( cd browser-extension && npm test )
+PACKAGE_ARGS=("${VERSION}" "${DIST}")
+if [ -n "${ABDM_EXTENSION_SIGNING_KEY:-}" ]; then
+  PACKAGE_ARGS+=(--crx-key "${ABDM_EXTENSION_SIGNING_KEY}")
+fi
 if command -v python3 >/dev/null 2>&1; then
-  python3 scripts/package-browser-extension.py "${VERSION}" "${DIST}"
+  python3 scripts/package-browser-extension.py "${PACKAGE_ARGS[@]}"
 elif command -v python >/dev/null 2>&1; then
-  python scripts/package-browser-extension.py "${VERSION}" "${DIST}"
+  python scripts/package-browser-extension.py "${PACKAGE_ARGS[@]}"
 else
   die "Python 3 is required to package the Chrome extension"
 fi
 EXTENSION_ZIP="abdm-server-chrome-extension-${VERSION}.zip"
+CHECKSUM_FILES=(server.jar docker-compose.yml "${EXTENSION_ZIP}")
+if [ -n "${ABDM_EXTENSION_SIGNING_KEY:-}" ]; then
+  CHECKSUM_FILES+=("abdm-server-chrome-extension-${VERSION}.crx")
+fi
 
 # --- 4. checksums ------------------------------------------------------------
 step "checksums"
 (
   cd "${DIST}"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum server.jar docker-compose.yml "${EXTENSION_ZIP}" > SHA256SUMS
+    sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 server.jar docker-compose.yml "${EXTENSION_ZIP}" > SHA256SUMS
+    shasum -a 256 "${CHECKSUM_FILES[@]}" > SHA256SUMS
   else
     die "neither sha256sum nor shasum is available"
   fi
