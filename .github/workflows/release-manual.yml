@@ -118,7 +118,8 @@ jobs:
       - name: Set up Android SDK for the pinned ABDM bridge
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platforms;android-37'
+          # ABDM v1.10.4 compiles against API 37; the SDK package is named 37.0.
+          packages: 'platforms;android-37.0'
 
       - name: Set up Node 22
         uses: actions/setup-node@v4

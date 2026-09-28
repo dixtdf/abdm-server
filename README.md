@@ -30,6 +30,7 @@
 - **上游引擎**：下载任务由固定版本的 AB Download Manager 运行时执行。
 - **多语言界面**：`en-US` / `zh-CN`，错误码与文案分离（见 [docs/i18n.md](docs/i18n.md)）。
 - **多架构镜像**：`linux/amd64` + `linux/arm64`。
+- **Chrome 下载接管扩展**：默认接管 HTTP(S) 下载，支持开关、登录 Cookie、服务器 IP/端口/Token 配置与 Chrome 账号同步（见 [browser-extension/README.md](browser-extension/README.md)）。
 
 ## 界面 Interface
 

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABDM</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="options.js"></script>
+</head>
+<body class="options">
+  <main>
+    <h1 data-i18n="settings"></h1>
+    <p class="muted" data-i18n="settingsDescription"></p>
+    <form id="settingsForm">
+      <label class="toggle-row"><span data-i18n="interceptDownloads"></span><input id="enabled" type="checkbox" role="switch"></label>
+      <div class="address-row">
+        <label><span data-i18n="protocol"></span><select id="protocol"><option value="http">HTTP</option><option value="https">HTTPS</option></select></label>
+        <label><span data-i18n="host"></span><input id="host" type="text" spellcheck="false" autocomplete="off" data-i18n-placeholder="hostPlaceholder" required></label>
+        <label><span data-i18n="port"></span><input id="port" type="number" min="1" max="65535" required></label>
+      </div>
+      <label><span data-i18n="token"></span><input id="token" type="password" spellcheck="false" autocomplete="off"></label>
+      <label><span data-i18n="captureMode"></span><select id="captureMode"><option value="all" data-i18n="captureAll"></option><option value="extensions" data-i18n="captureListed"></option></select></label>
+      <label><span data-i18n="extensions"></span><textarea id="extensions" rows="7" spellcheck="false"></textarea></label>
+      <p class="muted" data-i18n="extensionsHint"></p>
+      <p class="muted" data-i18n="syncNotice"></p>
+      <p class="muted" data-i18n="cookieNotice"></p>
+      <div class="actions"><button type="submit" class="primary" data-i18n="save"></button><button id="test" type="button" data-i18n="testConnection"></button></div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </form>
+    <section class="sync-check">
+      <h2 data-i18n="syncDiagnostics"></h2>
+      <p class="muted" data-i18n="syncInstructions"></p>
+      <p><span data-i18n="extensionId"></span>: <code id="extensionId"></code></p>
+      <div class="actions"><button id="writeProbe" type="button" data-i18n="writeProbe"></button><button id="readProbe" type="button" data-i18n="readProbe"></button></div>
+      <p id="probeStatus" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+</body>
+</html>

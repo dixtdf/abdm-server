@@ -17,6 +17,7 @@ import java.util.concurrent.ThreadFactory
 internal class LocalRangeServer(
     private val payload: ByteArray,
     private val fileName: String = "payload.bin",
+    private val requiredCookie: String? = null,
     /** Aggregate cap across all connections; 0 = unlimited. Slows the transfer down
      *  enough for pause/resume assertions to be meaningful on localhost. */
     private val bytesPerSecond: Long = 8L * 1024 * 1024,
@@ -39,6 +40,10 @@ internal class LocalRangeServer(
     val url: String get() = "http://127.0.0.1:${server.address.port}/$fileName"
 
     private fun handle(exchange: com.sun.net.httpserver.HttpExchange) {
+        if (requiredCookie != null && exchange.requestHeaders.getFirst("Cookie") != requiredCookie) {
+            exchange.sendResponseHeaders(403, -1)
+            return
+        }
         val headers = exchange.responseHeaders
         headers.add("Accept-Ranges", "bytes")
         headers.add("Content-Type", "application/octet-stream")

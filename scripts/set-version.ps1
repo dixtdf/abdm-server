@@ -108,6 +108,12 @@ try {
             Replace     = "        ?: `"$clean`""
         },
         @{
+            File        = 'browser-extension/manifest.json'
+            Description = 'Chrome extension version'
+            Pattern     = '(?m)^  "version": "[^"]+"(?=,?\r?$)'
+            Replace     = "  `"version`": `"$clean`""
+        },
+        @{
             File        = 'README.md'
             Description = 'README version line (zh) - pattern stays ASCII on purpose'
             Pattern     = '(?m)^(-[^\r\n]*`)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?([^\r\n]*)(?=\r?$)'

@@ -231,9 +231,14 @@ class AbdmDownloadEngine(
             )
         }
         val uri = validateUri(request.url)
+        val headers = request.headers.toMutableMap()
+        val cookies = request.cookies?.takeIf { it.isNotBlank() }
+        if (cookies != null && headers.keys.none { it.equals("Cookie", ignoreCase = true) }) {
+            headers["Cookie"] = cookies
+        }
         val credentials = HttpDownloadCredentials(
             link = uri.toString(),
-            headers = request.headers.takeIf { it.isNotEmpty() },
+            headers = headers.takeIf { it.isNotEmpty() },
             downloadPage = request.referer,
             userAgent = request.userAgent,
         )

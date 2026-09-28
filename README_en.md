@@ -34,6 +34,7 @@ Manager v1.10.4 as its only download engine.
 - **Bilingual UI**: `en-US` / `zh-CN`, with error codes separated from copy
   (see [docs/i18n.md](docs/i18n.md)).
 - **Multi-arch images**: `linux/amd64` + `linux/arm64`.
+- **Chrome download capture extension**: captures HTTP(S) downloads by default, with a toggle, login cookies, server IP/port/token settings and Chrome account sync ([setup](browser-extension/README.md)).
 
 ## Interface
 

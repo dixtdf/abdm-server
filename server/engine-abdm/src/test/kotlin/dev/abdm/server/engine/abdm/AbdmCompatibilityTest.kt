@@ -74,6 +74,54 @@ class AbdmCompatibilityTest {
     }
 
     @Test
+    fun `same filename creates a numbered task instead of rejecting the handoff`() = runBlocking {
+        LocalRangeServer(Random(105).nextBytes(1024), fileName = "same.sig").use { server ->
+            val root = Files.createTempDirectory("abdm-duplicate-out")
+            val data = Files.createTempDirectory("abdm-duplicate-data")
+            val scope = newScope()
+            val engine = engine(root, data, scope)
+            try {
+                engine.boot()
+                val request = CreateDownloadRequest(url = server.url, fileName = "same.sig", startImmediately = false)
+                val first = engine.create(request)
+                val second = engine.create(request)
+                assertTrue(first != second)
+                assertTrue(engine.get(first) != null)
+                assertTrue(engine.get(second) != null)
+                assertTrue(engine.get(first)?.fileName != engine.get(second)?.fileName)
+            } finally {
+                engine.shutdown()
+            }
+        }
+    }
+
+    @Test
+    fun `session cookies reach the pinned upstream engine`() = runBlocking {
+        val payload = Random(104).nextBytes(256 * 1024)
+        LocalRangeServer(payload, requiredCookie = "session=logged-in").use { server ->
+            val root = Files.createTempDirectory("abdm-cookie-out")
+            val data = Files.createTempDirectory("abdm-cookie-data")
+            val scope = newScope()
+            val engine = engine(root, data, scope)
+            try {
+                engine.boot()
+                val id = engine.create(CreateDownloadRequest(
+                    url = server.url,
+                    cookies = "session=logged-in",
+                    connections = 1,
+                ))
+                engine.start(id)
+                waitUntil(30_000) { engine.get(id)?.state?.isTerminal == true }
+                val snapshot = engine.get(id)!!
+                assertEquals(DownloadState.COMPLETED, snapshot.state, "download failed: ${snapshot.error}")
+                assertContentEquals(payload, Files.readAllBytes(Path.of(snapshot.path)))
+            } finally {
+                engine.shutdown()
+            }
+        }
+    }
+
+    @Test
     fun `create pause resume remove and live connection changes work end to end`() = runBlocking {
         val payload = Random(101).nextBytes(8 * 1024 * 1024)
         LocalRangeServer(payload).use { server ->

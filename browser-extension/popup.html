@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABDM</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body class="popup">
+  <header><h1 data-i18n="extensionName"></h1></header>
+  <main>
+    <label class="toggle-row"><span data-i18n="interceptDownloads"></span><input id="enabled" type="checkbox" role="switch"></label>
+    <p id="server" class="muted"></p>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p id="detail" class="muted"></p>
+    <div class="actions">
+      <button id="options" type="button" data-i18n="settings"></button>
+      <button id="openServer" type="button" data-i18n="openServer"></button>
+    </div>
+  </main>
+</body>
+</html>
