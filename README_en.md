@@ -6,7 +6,7 @@ A self-hosted download manager: one JVM process that serves both the REST/WebSoc
 and a bundled web UI. It is built for LAN-first deployments and uses pinned AB Download
 Manager v1.10.4 as its only download engine.
 
-- Version: `1.0.1`
+- Version: `1.0.2`
 - Repository: <https://github.com/dixtdf/abdm-server>
 - License: [Apache-2.0](LICENSE)
 - Upstream engine: [AB Download Manager](https://github.com/amir1376/ab-download-manager)
@@ -86,7 +86,7 @@ Manager v1.10.4 as its only download engine.
 
    ```dotenv
    IMAGE_OWNER=dixtdf        # or your own fork
-   IMAGE_TAG=latest          # or edge / 1.0.1
+   IMAGE_TAG=latest          # or edge / 1.0.2
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # or token
    AUTH_TOKEN=               # required when AUTH_MODE=token
@@ -110,7 +110,7 @@ Manager v1.10.4 as its only download engine.
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"1.0.1","engine":"abdm"}
+   # {"status":"ok","uptimeSeconds":3,"version":"1.0.2","engine":"abdm"}
    ```
 
 4. Open `http://<LAN IP>:6868`.
@@ -362,7 +362,7 @@ Release.
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `version` | yes | – | Semantic version such as `1.0.1` (a leading `v` is accepted) |
+| `version` | yes | – | Semantic version such as `1.0.2` (a leading `v` is accepted) |
 | `ref` | yes | `main` | Branch, tag or commit to build and tag |
 | `prerelease` | no | `false` | Mark the GitHub Release as a pre-release |
 | `push_latest` | no | `true` | Also move the `:latest` image tag |
@@ -380,10 +380,10 @@ Release.
 Produced artifacts:
 
 ```text
-ghcr.io/dixtdf/abdm-server:1.0.1     # version
+ghcr.io/dixtdf/abdm-server:1.0.2     # version
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # when push_latest=true
-tag: v1.0.1 (on the commit ref points at)
+tag: v1.0.2 (on the commit ref points at)
 ```
 
 Two notes:
@@ -398,8 +398,8 @@ Two notes:
 To reproduce the version stamping locally:
 
 ```bash
-./gradlew -Pproject.version=1.0.1 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.1
+./gradlew -Pproject.version=1.0.2 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.2
 ```
 
 Bump the version (one command updates the Gradle catalog, the frontend
@@ -408,10 +408,10 @@ READMEs; everything else derives from those):
 
 ```powershell
 # show what would change, write nothing
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.1 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.2 -DryRun
 
 # apply, optionally commit / tag / push
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.1 -Commit -Tag
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.2 -Commit -Tag
 ```
 
 ---

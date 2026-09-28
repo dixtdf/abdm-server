@@ -65,6 +65,11 @@ const totalLabel = computed(() =>
 const metaLabel = computed(() => t('a11y.cardActions', { name: task.value.fileName }))
 
 const sizeTitle = computed(() => `${t('download.downloaded')} / ${t('download.total')}`)
+
+function onDoubleClick(event: MouseEvent): void {
+  if ((event.target as HTMLElement).closest('button, a, input')) return
+  emit('details', task.value.id)
+}
 </script>
 
 <template>
@@ -74,18 +79,20 @@ const sizeTitle = computed(() => `${t('download.downloaded')} / ${t('download.to
     :data-task-id="task.id"
     tabindex="0"
     :aria-label="task.fileName"
-    @click="emit('details', task.id)"
+    @dblclick="onDoubleClick"
     @keydown.enter.prevent="emit('details', task.id)"
   >
     <header class="download__head">
-      <label class="download__select" @click.stop @pointerdown.stop>
-        <input
-          type="checkbox"
-          :checked="selected"
+      <span class="download__select" @click.stop @pointerdown.stop>
+        <button
+          type="button"
+          class="download__select-control"
+          role="checkbox"
+          :aria-checked="selected"
           :aria-label="t('download.selectTask', { name: task.fileName })"
-          @change="emit('select', task.id, ($event.target as HTMLInputElement).checked)"
-        />
-      </label>
+          @click.stop="emit('select', task.id, !selected)"
+        ></button>
+      </span>
       <span class="download__icon" aria-hidden="true"><IconFile /></span>
 
       <div class="download__titles">
@@ -186,12 +193,35 @@ const sizeTitle = computed(() => `${t('download.downloaded')} / ${t('download.to
   cursor: pointer;
 }
 
-.download__select input {
+.download__select-control {
   width: 17px;
   height: 17px;
-  margin: 0;
-  accent-color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px solid var(--text-secondary);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--primary-foreground);
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
+}
+
+.download__select-control[aria-checked='true'] {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.download__select-control[aria-checked='true']::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border-inline-end: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
 }
 
 .download--list {

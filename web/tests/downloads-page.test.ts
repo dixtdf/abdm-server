@@ -35,9 +35,27 @@ function setup() {
   return { wrapper, downloads, ui }
 }
 
+function pointerDown(element: Element, x: number, y: number): void {
+  const event = new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y })
+  Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+  element.dispatchEvent(event)
+}
+
+function positionRows(rows: ReturnType<ReturnType<typeof setup>['wrapper']['findAll']>): void {
+  rows.forEach((row, index) => {
+    const top = index * 50
+    vi.spyOn(row.element, 'getBoundingClientRect').mockReturnValue({
+      left: 0, right: 200, top, bottom: top + 40,
+    } as DOMRect)
+  })
+}
+
+function selected(wrapper: ReturnType<typeof setup>['wrapper']): boolean[] {
+  return wrapper.findAll('.download__select-control').map(button => button.attributes('aria-checked') === 'true')
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
-  Reflect.deleteProperty(document, 'elementFromPoint')
   document.body.innerHTML = ''
   localStorage.removeItem(STORAGE_KEYS.downloadsView)
 })
@@ -53,8 +71,8 @@ describe('download selection', () => {
     expect(localStorage.getItem(STORAGE_KEYS.downloadsView)).toBe('card')
 
     await wrapper.find('.downloads-toolbar__all input').setValue(true)
-    expect(wrapper.findAll('.download__select input').every(input => (input.element as HTMLInputElement).checked)).toBe(true)
-    await wrapper.findAll('.download__select input')[2]!.setValue(false)
+    expect(selected(wrapper)).toEqual([true, true, true])
+    await wrapper.findAll('.download__select-control')[2]!.trigger('click')
     expect(wrapper.text()).toContain('2 selected')
 
     await wrapper.find('.downloads-toolbar .btn--danger').trigger('click')
@@ -70,30 +88,78 @@ describe('download selection', () => {
   it('selects a mouse-dragged range without opening details', async () => {
     const { wrapper, ui } = setup()
     const rows = wrapper.findAll('[data-task-id]')
-    Object.defineProperty(document, 'elementFromPoint', {
-      configurable: true,
-      value: vi.fn().mockReturnValue(rows[1]!.element),
-    })
-    const down = new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 10 })
-    Object.defineProperty(down, 'pointerType', { value: 'mouse' })
-    rows[0]!.element.dispatchEvent(down)
-    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 10, clientY: 35 }))
+    positionRows(rows)
+    pointerDown(rows[0]!.element, 10, 10)
+    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 20, clientY: 65 }))
     window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     rows[0]!.element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
-    expect(wrapper.findAll('.download__select input').map(input => (input.element as HTMLInputElement).checked)).toEqual([true, true, false])
+    expect(selected(wrapper)).toEqual([true, true, false])
     expect(ui.selectedTaskId).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('draws a marquee from blank space and selects intersecting rows', async () => {
+    const { wrapper, ui } = setup()
+    const rows = wrapper.findAll('[data-task-id]')
+    positionRows(rows)
+    pointerDown(wrapper.find('.selection-surface').element, 250, 145)
+    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 55 }))
+    await nextTick()
+    expect(wrapper.find('.selection-box').exists()).toBe(true)
+    expect(selected(wrapper)).toEqual([false, true, true])
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('.selection-box').exists()).toBe(false)
+    expect(ui.selectedTaskId).toBeNull()
+
+    await wrapper.find('.downloads-toolbar__views button:last-child').trigger('click')
+    pointerDown(wrapper.find('.selection-surface').element, 250, 145)
+    window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 55 }))
+    await nextTick()
+    expect(selected(wrapper)).toEqual([false, true, true])
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    wrapper.unmount()
+  })
+
+  it('selects an anchored range with Shift+left click without opening details', async () => {
+    const { wrapper, ui } = setup()
+    await wrapper.findAll('.download__select-control')[0]!.trigger('click')
+    wrapper.findAll('[data-task-id]')[2]!.element.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
+    await nextTick()
+    expect(selected(wrapper)).toEqual([true, true, true])
+    expect(ui.selectedTaskId).toBeNull()
+    wrapper.findAll('.download__select-control')[1]!.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true }))
+    await nextTick()
+    expect(selected(wrapper)).toEqual([true, true, false])
+    wrapper.unmount()
+  })
+
+  it('uses Explorer-like row clicks for anchor, range, and Ctrl toggle', async () => {
+    const { wrapper, ui } = setup()
+    const rows = wrapper.findAll('[data-task-id]')
+    await rows[0]!.trigger('click')
+    expect(selected(wrapper)).toEqual([true, false, false])
+    expect(ui.selectedTaskId).toBeNull()
+
+    await rows[2]!.trigger('click', { shiftKey: true })
+    expect(selected(wrapper)).toEqual([true, true, true])
+    await rows[1]!.trigger('click', { ctrlKey: true })
+    expect(selected(wrapper)).toEqual([true, false, true])
+
+    await rows[2]!.trigger('dblclick')
+    expect(ui.selectedTaskId).toBe('c')
     wrapper.unmount()
   })
 
   it('keeps a failed deletion selected for retry', async () => {
     vi.spyOn(api, 'deleteDownload').mockRejectedValueOnce(new Error('server unavailable'))
     const { wrapper, downloads, ui } = setup()
-    await wrapper.find('.download__select input').setValue(true)
+    await wrapper.find('.download__select-control').trigger('click')
     await wrapper.find('.downloads-toolbar .btn--danger').trigger('click')
     ;(document.body.querySelector('.dialog__footer .btn--danger') as HTMLButtonElement).click()
     await vi.waitFor(() => expect(ui.toasts.some(toast => toast.detail === 'server unavailable')).toBe(true))
-    expect((wrapper.find('.download__select input').element as HTMLInputElement).checked).toBe(true)
+    expect(selected(wrapper)[0]).toBe(true)
     expect(downloads.tasks).toHaveLength(3)
     wrapper.unmount()
   })

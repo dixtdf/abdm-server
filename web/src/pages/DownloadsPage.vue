@@ -37,6 +37,9 @@ const selectedCount = computed(() => selectedIds.value.size)
 const allSelected = computed(() => downloads.tasks.length > 0 && downloads.tasks.every(task => selectedIds.value.has(task.id)))
 const someSelected = computed(() => selectedCount.value > 0 && !allSelected.value)
 const selectAllInput = ref<HTMLInputElement | null>(null)
+const selectionSurface = ref<HTMLElement | null>(null)
+const selectionBox = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+let selectionAnchor: string | null = null
 
 watch([someSelected, selectAllInput], () => {
   if (selectAllInput.value) selectAllInput.value.indeterminate = someSelected.value
@@ -44,6 +47,7 @@ watch([someSelected, selectAllInput], () => {
 
 watch(() => downloads.tasks.map(task => task.id), (ids) => {
   const current = new Set(ids)
+  if (selectionAnchor && !current.has(selectionAnchor)) selectionAnchor = null
   if ([...selectedIds.value].some(id => !current.has(id))) {
     selectedIds.value = new Set([...selectedIds.value].filter(id => current.has(id)))
   }
@@ -59,25 +63,49 @@ function selectTask(id: string, selected: boolean): void {
   if (selected) next.add(id)
   else next.delete(id)
   selectedIds.value = next
+  selectionAnchor = id
 }
 
 function toggleAll(): void {
   selectedIds.value = allSelected.value ? new Set() : new Set(downloads.tasks.map(task => task.id))
+  selectionAnchor = selectedIds.value.size ? downloads.tasks[0]?.id ?? null : null
 }
 
-// A mouse drag across rows/cards selects the contiguous range it touches.
-let dragStart: { id: string; x: number; y: number; original: Set<string> } | null = null
+function selectRange(id: string, additive: boolean): void {
+  const ids = downloads.tasks.map(task => task.id)
+  const start = Math.max(0, ids.indexOf(selectionAnchor ?? id))
+  const end = ids.indexOf(id)
+  if (end < 0) return
+  const next = additive ? new Set(selectedIds.value) : new Set<string>()
+  for (let index = Math.min(start, end); index <= Math.max(start, end); index++) next.add(ids[index]!)
+  selectedIds.value = next
+  selectionAnchor ??= id
+}
+
+// Dragging from blank space draws a selection rectangle; dragging from an item
+// uses the same rectangle so both list rows and cards respond consistently.
+let dragStart: { id: string | null; x: number; y: number; original: Set<string>; additive: boolean } | null = null
 let dragged = false
 let suppressClick = false
 
 function onPointerDown(event: PointerEvent): void {
   if (event.pointerType !== 'mouse' || event.button !== 0 || removing.value) return
   const target = event.target as HTMLElement
+  if (event.shiftKey && target.closest('[data-task-id]') && !target.closest('button:not(.download__select-control), a')) {
+    // Keep Shift+click on a checkbox from moving keyboard focus to it.
+    event.preventDefault()
+    return
+  }
   if (target.closest('button, input, label, a')) return
   const item = target.closest<HTMLElement>('[data-task-id]')
-  if (!item?.dataset.taskId) return
   event.preventDefault()
-  dragStart = { id: item.dataset.taskId, x: event.clientX, y: event.clientY, original: new Set(selectedIds.value) }
+  dragStart = {
+    id: item?.dataset.taskId ?? null,
+    x: event.clientX,
+    y: event.clientY,
+    original: new Set(selectedIds.value),
+    additive: event.ctrlKey || event.metaKey,
+  }
   dragged = false
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp, { once: true })
@@ -87,13 +115,18 @@ function onPointerMove(event: PointerEvent): void {
   if (!dragStart) return
   if (!dragged && Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y) < 5) return
   dragged = true
-  const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-task-id]')
-  const ids = downloads.tasks.map(task => task.id)
-  const start = ids.indexOf(dragStart.id)
-  const end = ids.indexOf(hovered?.dataset.taskId ?? dragStart.id)
-  if (start < 0 || end < 0) return
-  const next = event.ctrlKey || event.metaKey ? new Set(dragStart.original) : new Set<string>()
-  for (let index = Math.min(start, end); index <= Math.max(start, end); index++) next.add(ids[index]!)
+  const left = Math.min(dragStart.x, event.clientX)
+  const top = Math.min(dragStart.y, event.clientY)
+  const right = Math.max(dragStart.x, event.clientX)
+  const bottom = Math.max(dragStart.y, event.clientY)
+  selectionBox.value = { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }
+  const next = dragStart.additive ? new Set(dragStart.original) : new Set<string>()
+  for (const item of selectionSurface.value?.querySelectorAll<HTMLElement>('[data-task-id]') ?? []) {
+    const bounds = item.getBoundingClientRect()
+    if (left <= bounds.right && right >= bounds.left && top <= bounds.bottom && bottom >= bounds.top) {
+      if (item.dataset.taskId) next.add(item.dataset.taskId)
+    }
+  }
   selectedIds.value = next
   event.preventDefault()
 }
@@ -101,18 +134,43 @@ function onPointerMove(event: PointerEvent): void {
 function onPointerUp(): void {
   window.removeEventListener('pointermove', onPointerMove)
   if (dragged) {
+    const firstSelected = downloads.tasks.find(task => selectedIds.value.has(task.id))
+    selectionAnchor = dragStart?.id ?? firstSelected?.id ?? null
     suppressClick = true
     window.setTimeout(() => { suppressClick = false }, 0)
   }
+  selectionBox.value = null
   dragStart = null
   dragged = false
 }
 
 function onClickCapture(event: MouseEvent): void {
-  if (!suppressClick) return
-  event.preventDefault()
-  event.stopPropagation()
-  suppressClick = false
+  if (suppressClick) {
+    event.preventDefault()
+    event.stopPropagation()
+    suppressClick = false
+    return
+  }
+  const target = event.target as HTMLElement
+  const item = target.closest<HTMLElement>('[data-task-id]')
+  const id = item?.dataset.taskId
+  if (!id) {
+    selectedIds.value = new Set()
+    selectionAnchor = null
+    return
+  }
+  if (target.closest('button:not(.download__select-control), a')) return
+  if (event.shiftKey) {
+    event.preventDefault()
+    event.stopPropagation()
+    selectRange(id, event.ctrlKey || event.metaKey)
+  } else if (!target.closest('.download__select-control')) {
+    const next = event.ctrlKey || event.metaKey ? new Set(selectedIds.value) : new Set<string>()
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    selectedIds.value = next
+    selectionAnchor = id
+  }
 }
 
 onBeforeUnmount(() => {
@@ -245,19 +303,22 @@ function onCreated(): void {
       </EmptyState>
     </div>
 
-    <div v-else class="list" :class="`list--${view}`" @pointerdown="onPointerDown" @click.capture="onClickCapture">
-      <DownloadCard
-        v-for="task in downloads.tasks"
-        :key="task.id"
-        :task="task"
-        :view="view"
-        :selected="selectedIds.has(task.id)"
-        @pause="onPause"
-        @resume="onResume"
-        @remove="askRemove"
-        @details="ui.selectTask"
-        @select="selectTask"
-      />
+    <div v-else ref="selectionSurface" class="selection-surface" @pointerdown.capture="onPointerDown" @click.capture="onClickCapture" @dragstart.prevent>
+      <div class="list" :class="`list--${view}`">
+        <DownloadCard
+          v-for="task in downloads.tasks"
+          :key="task.id"
+          :task="task"
+          :view="view"
+          :selected="selectedIds.has(task.id)"
+          @pause="onPause"
+          @resume="onResume"
+          @remove="askRemove"
+          @details="ui.selectTask"
+          @select="selectTask"
+        />
+      </div>
+      <div v-if="selectionBox" class="selection-box" :style="{ left: `${selectionBox.left}px`, top: `${selectionBox.top}px`, width: `${selectionBox.width}px`, height: `${selectionBox.height}px` }" aria-hidden="true" />
     </div>
 
     <AddDownloadDialog
@@ -292,6 +353,19 @@ function onCreated(): void {
 </template>
 
 <style scoped>
+.selection-surface {
+  min-height: calc(100vh - 190px);
+  cursor: crosshair;
+}
+
+.selection-box {
+  position: fixed;
+  z-index: 20;
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
+  pointer-events: none;
+}
+
 .list {
   display: grid;
   gap: var(--space-3);

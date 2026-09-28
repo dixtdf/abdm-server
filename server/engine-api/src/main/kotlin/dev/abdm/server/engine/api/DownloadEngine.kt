@@ -13,7 +13,7 @@ val ENGINE_API_FALLBACK_VERSION: String =
     dev.abdm.server.engine.api.DownloadEngine::class.java.`package`
         ?.implementationVersion
         ?.takeIf { it.isNotBlank() }
-        ?: "1.0.1"
+        ?: "1.0.2"
 
 /** Optional behaviours an engine implementation may or may not support. */
 enum class EngineCapability {
