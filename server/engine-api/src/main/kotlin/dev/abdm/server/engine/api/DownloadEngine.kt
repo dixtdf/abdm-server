@@ -30,12 +30,11 @@ enum class EngineCapability {
 /**
  * The contract the web server talks to.
  *
- * Nothing in this file mentions AB Download Manager: swapping the engine
- * (native -> ABDM, or ABDM 1.x -> 2.x) never touches web-api, persistence,
- * scheduler or the frontend.
+ * Keeps upstream downloader types inside `server:engine-abdm`; API and scheduler
+ * code depend only on this contract.
  */
 interface DownloadEngine {
-    /** Human readable engine id, e.g. `native` or `abdm`. */
+    /** Human readable engine id (`abdm`). */
     val name: String
 
     val capabilities: Set<EngineCapability>

@@ -115,6 +115,11 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Set up Android SDK for the pinned ABDM bridge
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-37'
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
@@ -123,8 +128,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       # --- verification ------------------------------------------------------
+      - name: Export AB Download Manager v1.10.4 runtime
+        run: scripts/build-abdm-bridge.sh
+
       - name: Backend build and tests
-        run: ./gradlew --no-daemon build -Pabdm.enabled=false
+        run: ./gradlew --no-daemon build
 
       - name: Frontend install
         working-directory: web
@@ -144,7 +152,7 @@ jobs:
         run: |
           set -euo pipefail
           ( cd web && npm run build )
-          ./gradlew --no-daemon -Pabdm.enabled=false -Pproject.version="${{ steps.release.outputs.version }}" :server:app:fatJar
+          ./gradlew --no-daemon -Pproject.version="${{ steps.release.outputs.version }}" :server:app:fatJar
           ls -l server/app/build/libs
 
       - name: Stage release assets
@@ -247,6 +255,7 @@ jobs:
             ## abdm-server ${{ steps.release.outputs.tag }}
 
             Built from `${{ inputs.ref }}` (`${{ github.sha }}`).
+            Download engine: AB Download Manager v1.10.4.
 
             Container image (multi-arch, `linux/amd64` + `linux/arm64`):
 

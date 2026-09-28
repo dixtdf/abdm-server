@@ -3,8 +3,8 @@
 [简体中文](README.md) | **English**
 
 A self-hosted download manager: one JVM process that serves both the REST/WebSocket API
-and a bundled web UI. It is built for LAN-first deployments, uses the built-in segmented
-download engine by default, and can switch to AB Download Manager as its backend engine.
+and a bundled web UI. It is built for LAN-first deployments and uses pinned AB Download
+Manager v1.10.4 as its only download engine.
 
 - Version: `0.2.0`
 - Repository: <https://github.com/dixtdf/abdm-server>
@@ -16,9 +16,8 @@ download engine by default, and can switch to AB Download Manager as its backend
 
 ## Features
 
-- **Segmented downloads with 1–256 connections per task**: range planning plus an
-  interval set of completed bytes, so changing the connection count mid-download,
-  resuming and restarting all take the same code path.
+- **Segmented downloads with 1–256 connections per task**: upstream ABDM owns
+  part allocation, connection changes and resuming.
 - **Queue and concurrency control**: `maxConcurrentDownloads` caps parallel downloads;
   the rest are queued and report their `queuePosition`.
 - **Live progress over WebSocket** (`download.progress` / `download.state` / …) throttled
@@ -29,11 +28,9 @@ download engine by default, and can switch to AB Download Manager as its backend
   or resetting the numbers.
 - **Speed limits**: global `globalSpeedLimit` and per task `speedLimit`.
 - **HLS, checksums, proxy, custom headers / cookies / referer / user-agent** per task.
-- **Persistence**: SQLite (WAL) stores tasks, progress checkpoints, history and settings;
-  unfinished downloads resume after a restart (configurable).
-- **Pluggable engine**: built-in `engine-native`, or compile against the `engine-abdm`
-  adapter (`-Pabdm.enabled=true`). The API, the database and the frontend never notice
-  which engine is running.
+- **Persistence**: ABDM stores download and part state; SQLite (WAL) stores server
+  settings, queue order and API records. Unfinished tasks can resume after a restart.
+- **Upstream engine**: downloads run on the pinned AB Download Manager runtime.
 - **Bilingual UI**: `en-US` / `zh-CN`, with error codes separated from copy
   (see [docs/i18n.md](docs/i18n.md)).
 - **Multi-arch images**: `linux/amd64` + `linux/arm64`.
@@ -112,23 +109,25 @@ download engine by default, and can switch to AB Download Manager as its backend
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"0.1.0","engine":"native"}
+   # {"status":"ok","uptimeSeconds":3,"version":"0.2.0","engine":"abdm"}
    ```
 
 4. Open `http://<LAN IP>:6868`.
 
-To use a locally built image: `docker build -t abdm-server:local .`, then point `image`
+To build the default image locally, first run
+`git submodule update --init third_party/ab-download-manager` and
+`bash scripts/build-abdm-bridge.sh`, then `docker build -t abdm-server:local .`. Point `image`
 at `abdm-server:local` using the override shown in the comments at the top of
 `docker-compose.yml`.
 
 ### Option 2: Local development (frontend and backend separately)
 
-Requirements: JDK 17 and Node 22+. The default (`native`) engine needs nothing else. To
-build the `engine-abdm` adapter you additionally need JDK 25 (upstream pins
-`jvm.toolchain=25`) and an Android SDK, and you must export the upstream runtime first
-with `bash scripts/build-abdm-bridge.sh` (see below).
+Requirements: JDK 17 and Node 22+. The default ABDM build also needs an Android SDK,
+`git submodule update --init third_party/ab-download-manager`, and
+`bash scripts/build-abdm-bridge.sh` before building the server. The export script
+targets Java 17 without modifying upstream sources.
 
-Backend (default `native` engine, port 6868):
+Backend (default `abdm` engine, port 6868):
 
 ```bash
 # Linux / macOS
@@ -173,9 +172,12 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 | `ABDM_AUTH_MODE` | `none` | `none` or `token`; `none` prints a prominent warning at boot |
 | `ABDM_AUTH_TOKEN` | empty | Required with `AUTH_MODE=token`. Every route except `/api/v1/health` needs `Authorization: Bearer <token>`; the WebSocket also accepts `?token=<token>` |
 | `ABDM_WEB_DIR` | `/app/web` | Directory holding the built frontend; `/app/web` inside the image |
-| `ABDM_ENGINE` | `native` | `native` (built-in engine) or `abdm` (requires a `-Pabdm.enabled=true` build) |
 | `ABDM_LOG_LEVEL` | `info` | Log level (`debug` / `info` / `warn` / `error`) |
 | `TZ` | `Asia/Shanghai` | Container timezone (logs and display only) |
+
+Before upgrading an older native installation, back up `/config` and the download
+directory. ABDM cannot directly resume the old task IDs and part state. The new
+version refuses to start while those records remain; migrate or remove them first.
 
 ### Server settings
 
@@ -247,8 +249,7 @@ server/app          Ktor bootstrap, dependency wiring, static assets
 server/web-api      REST + WebSocket routes and DTO mapping (contract in docs/api.md)
 server/scheduler    Queue, concurrency, state machine, restart recovery
 server/engine-api   Engine ports: DownloadEngine / EngineEvent / PathGuard / storage
-server/engine-native Built-in segmented engine (default, always built)
-server/engine-abdm   AB Download Manager adapter (optional, abdm.enabled=true)
+server/engine-abdm   AB Download Manager adapter (the only download engine)
 server/persistence  SQLite (WAL) storage
 web/                Vue 3 + Vite frontend
 third_party/ab-download-manager   Upstream submodule (read-only, never modified)
@@ -265,11 +266,9 @@ Layering, the threading/coroutine model and the restart-recovery flow are descri
 
 - Pinned to `AB Download Manager v1.10.4`, commit
   `afc57634b3c121c6415213242b2b600cccc6fd6e`.
-- The default build (`-Pabdm.enabled=false`) compiles the adapter as a stub and serves
-  everything with the built-in engine — **no Android SDK required**.
-- Only `-Pabdm.enabled=true` compiles the real adapter, and it compiles against the
-  upstream runtime jars exported to `third_party/abdm-dist/` by
-  `scripts/build-abdm-bridge.sh` (that export needs JDK 25 + an Android SDK).
+- Every build compiles against the pinned upstream
+  runtime jars exported to `third_party/abdm-dist/` by `scripts/build-abdm-bridge.sh`.
+  The export needs an Android SDK and targets Java 17.
 - `third_party/ab-download-manager` is **never modified**; all adaptation lives in
   `server/engine-abdm/`.
 - Upgrade procedure and the compatibility checklist: [docs/upstream.md](docs/upstream.md).
@@ -293,10 +292,11 @@ scripts/build-release.sh       # build frontend + fat jar, write dist/SHA256SUMS
 Backend:
 
 ```bash
-./gradlew build -Pabdm.enabled=false                                     # compile + unit tests
-bash scripts/build-abdm-bridge.sh                                        # export upstream runtime (JDK 25 + Android SDK)
-./gradlew -Pabdm.enabled=true :server:engine-abdm:test                   # AbdmCompatibilityTest
-./gradlew --no-daemon -Pabdm.enabled=false :server:app:shadowJar         # build the fat jar
+git submodule update --init third_party/ab-download-manager              # pinned v1.10.4
+bash scripts/build-abdm-bridge.sh                                        # export Java 17 runtime
+./gradlew build                                                         # ABDM build + compatibility tests
+./gradlew :server:engine-abdm:test                                       # AbdmCompatibilityTest
+./gradlew --no-daemon :server:app:shadowJar                              # build the fat jar
 ```
 
 Frontend (inside `web/`):
@@ -342,11 +342,8 @@ java -jar server/app/build/libs/abdm-server-*-all.jar
 powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb 256
 ```
 
-On the unit-test side, `NativeDownloadEngineTest` in `server/engine-native` follows the same
-approach in-process (with its own Range server); its
-`a restart resumes from the sqlite checkpoint instead of starting over` test is the
-regression test for "resume after restart", and `AbdmCompatibilityTest` runs the same
-scenarios against the real ABDM engine.
+`AbdmCompatibilityTest` uses a local Range server and the real ABDM engine to
+verify downloads, pause, restart recovery, and connection handling.
 
 ---
 
@@ -397,7 +394,7 @@ Two notes:
 To reproduce the version stamping locally:
 
 ```bash
-./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
+./gradlew -Pproject.version=0.2.0 :server:app:fatJar
 java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 0.2.0
 ```
 

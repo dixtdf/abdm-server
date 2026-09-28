@@ -102,5 +102,5 @@ cat <<EOF
 Submodule check PASSED — pinned AB Download Manager ${PIN_VERSION} (${PIN_COMMIT}).
 
 To compile the adapter against it (needs an Android SDK):
-  ./gradlew -Pabdm.enabled=true :server:engine-abdm:test
+  ./gradlew :server:engine-abdm:test
 EOF

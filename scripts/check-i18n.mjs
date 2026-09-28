@@ -81,7 +81,7 @@ export function listLocaleFiles(localesDir) {
 export function parseErrorCodes(apiMarkdown) {
   const section = apiMarkdown.split(/^##\s+Error code catalogue\s*$/m)[1]
   if (!section) return []
-  const block = section.match(/```[a-z]*\n([\s\S]*?)```/)
+  const block = section.match(/```[a-z]*\r?\n([\s\S]*?)```/)
   const body = block ? block[1] : section
   const codes = (body.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\b/g) ?? []).filter(
     (token) => token.length >= 3,

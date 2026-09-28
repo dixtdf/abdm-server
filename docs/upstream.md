@@ -30,12 +30,8 @@ Human-readable:
 The submodule is registered by the repository owner (`.gitmodules`). This
 document and the scripts only reference the path; they never create it.
 
-Build-time switch:
-
-```
-abdm.enabled=true   # compile server:engine-abdm against the exported bridge
-abdm.enabled=false  # compile the stub, run the built-in native engine (default)
-```
+The server has one download engine. Every build requires the exported upstream
+runtime; there is no local downloader or engine selection switch.
 
 ### The bridge (`third_party/abdm-dist`)
 
@@ -49,45 +45,44 @@ scripts/build-abdm-bridge.sh
 ```
 
 That script runs upstream's own `:downloader:core:exportAbdmDist` task through an
-init script (`scripts/abdm-bridge.init.gradle.kts`), so the submodule is never
+init script (`scripts/abdm-bridge.init.gradle`), so upstream source files are never
 modified. Requirements for that step only:
 
-- **JDK 25** — upstream pins `jvm.toolchain=25`;
+- **JDK 17** — the export overrides upstream's default `jvm.toolchain=25` with
+  `-Pjvm.toolchain=17`, producing Java 17 bytecode;
 - **an Android SDK** — only to *configure* upstream's KMP/android target. No
   Android artifact is consumed by this project;
 - network access on the first run.
 
-With `abdm.enabled=true` and an empty `third_party/abdm-dist`, the build fails
-fast with an explicit Gradle error instead of a compile error.
+With an empty or mismatched `third_party/abdm-dist`, the build fails fast with an
+explicit Gradle error instead of compiling against the wrong engine.
 
-CI keeps `false` everywhere except the `abdm-compat` job, which runs on GitHub's
-ubuntu image (Android SDK pre-installed), builds the bridge when the jars are not
-already present, and then runs the compatibility test on pushes to `main` and on
-manual dispatch. The `Test` tasks of `server:engine-abdm` are disabled unless
-`abdm.enabled=true`, so a default build never tries to reach upstream.
+The manual release workflow checks out the pinned submodule, exports the bridge,
+runs the compatibility tests, and builds the ABDM jar and image.
 
 ## Policy: never edit `third_party/`
 
-1. Everything under `third_party/` is upstream code, checked out at the pinned
-   commit. Do not edit, patch, reformat, move or generate files inside it.
+1. Do not edit or patch tracked files under `third_party/ab-download-manager`.
+   The Gradle build may generate ignored output there; exported jars go to
+   `third_party/abdm-dist/` and are ignored by Git.
 2. All adaptation lives in `server:engine-abdm`. If upstream needs a change,
    send it upstream.
 3. `git submodule update --init --recursive` must leave that tree clean;
    `scripts/check-abdm.sh` fails if it is dirty.
-4. No build script writes into `third_party/`; the Gradle cache and build
-   directories stay inside `server/**/build/`.
+4. The bridge export uses the pinned upstream build and checks its commit before
+   compiling. The generated `abdm-dist` jars enter the Docker build context.
 5. Because we never modify it, the entire upstream license obligation is
    satisfied by attribution in `THIRD_PARTY_NOTICES.md`.
 
 ## Updating the pin
 
 Prerequisites: the submodule is initialised (`git submodule update --init
---recursive`), a JDK 25 plus an Android SDK for the bridge build, and a JDK 17
-for the server build.
+third_party/ab-download-manager`), JDK 17 and an Android SDK for the bridge
+build, and JDK 17 for the server build.
 
 ```bash
 # 1. move the pin
-scripts/update-abdm.sh v1.10.5      # or an explicit commit
+scripts/update-abdm.sh v1.10.5      # release tags only
                                     # prints old -> new commit and rewrites the
                                     # pin block above
 
@@ -95,17 +90,16 @@ scripts/update-abdm.sh v1.10.5      # or an explicit commit
 scripts/check-abdm.sh
 
 # 3. re-export the bridge from the new commit (deletes nothing upstream)
-rm -rf third_party/abdm-dist
 scripts/build-abdm-bridge.sh
 
 # 4. prove the adapter still compiles and behaves
-./gradlew -Pabdm.enabled=true :server:engine-abdm:test
+./gradlew :server:engine-abdm:test
 
 # 5. review and commit
-#    third_party/abdm-dist is a build output: commit it only if this repository
-#    tracks the exported jars, otherwise leave it to CI to rebuild.
+#    third_party/abdm-dist jars are ignored; CI rebuilds them from the pin.
 git diff --submodule
-git add third_party/ab-download-manager docs/upstream.md
+git add third_party/ab-download-manager docs README.md README_en.md \
+  THIRD_PARTY_NOTICES.md Dockerfile scripts .github server/engine-abdm
 git commit -m "chore: update AB Download Manager to v1.10.5"
 ```
 
@@ -113,17 +107,17 @@ Windows: run the scripts through Git Bash or WSL (`bash scripts/update-abdm.sh
 v1.10.5`) — they are Bash and rely on standard POSIX tools.
 
 Updating is a local, deliberate step: run `scripts/update-abdm.sh <tag>` to move the
-pin, then step 3 (the compatibility test) before committing. There is no scheduled
-workflow for it — `update-abdm.sh` prints the upstream tag comparison for you.
+pin, then export the bridge and run the compatibility test before committing.
+There is no scheduled workflow for it — `update-abdm.sh` prints the upstream
+tag comparison for you.
 
 ## What to check: `AbdmCompatibilityTest`
 
 `AbdmCompatibilityTest` (`server/engine-abdm`) is the guard rail for every
 upstream upgrade. It compiles the adapter against the exported bridge and
 exercises the capability list the server depends on, so a renamed or removed API
-fails immediately instead of at runtime. It is network dependent by design (it
-downloads a small file from a public mirror), which is why it runs in the
-`abdm-compat` job rather than on every pull request. Checklist:
+fails immediately instead of at runtime. Its download fixtures use a local
+HTTP server; the manual release workflow runs it before publishing. Checklist:
 
 | # | Capability | Why the server needs it |
 | --- | --- | --- |

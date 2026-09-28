@@ -15,7 +15,8 @@
 #   image: ghcr.io/<IMAGE_OWNER>/abdm-server:<IMAGE_TAG>
 #
 # --- switching to a locally built image --------------------------------------
-#   1. docker build -t abdm-server:local .
+#   1. git submodule update --init third_party/ab-download-manager
+#      bash scripts/build-abdm-bridge.sh && docker build -t abdm-server:local .
 #   2. in .env:  IMAGE_OWNER=abdm-server  IMAGE_TAG=local  (or any local tag)
 #   3. docker compose up -d --force-recreate
 #   With `IMAGE_OWNER=abdm-server` the resolved image becomes
@@ -61,8 +62,6 @@ services:
       # none | token — with `token` set ABDM_AUTH_TOKEN below.
       ABDM_AUTH_MODE: ${AUTH_MODE:-none}
       ABDM_AUTH_TOKEN: ${AUTH_TOKEN:-}
-      # native | abdm
-      ABDM_ENGINE: ${ENGINE:-native}
       ABDM_LOG_LEVEL: ${LOG_LEVEL:-info}
 
     healthcheck:

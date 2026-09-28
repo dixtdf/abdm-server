@@ -19,22 +19,19 @@ val projectVersion: String = providers.gradleProperty("project.version").orNull
         .requiredVersion
 
 // ---------------------------------------------------------------------------
-// Language level follows the engine.
-//
-// The built-in engine is plain JVM 17. The AB Download Manager bridge is compiled
-// against upstream's desktop artifacts, which upstream builds with `jvm.toolchain=25`
-// (class file version 69), so an abdm-enabled build needs JDK 25 for both compiling
-// and running. This is why `-Pabdm.enabled=true` also raises the toolchain here.
+// The pinned ABDM sources are exported with `-Pjvm.toolchain=17`.
 // ---------------------------------------------------------------------------
-val abdmEnabled: Boolean = providers.gradleProperty("abdm.enabled").getOrElse("false").toBoolean()
-val javaVersion: Int = if (abdmEnabled) 25 else 17
+val javaVersion: Int = 17
+require(providers.gradleProperty("abdm.enabled").orNull != "false") {
+    "-Pabdm.enabled=false is no longer supported: every build uses upstream ABDM."
+}
 
 allprojects {
     group = "dev.abdm.server"
     version = projectVersion
 }
 
-logger.lifecycle("abdm-server: abdm.enabled=$abdmEnabled, jvm toolchain=$javaVersion")
+logger.lifecycle("abdm-server: pinned ABDM engine, jvm toolchain=$javaVersion")
 
 subprojects {
     plugins.withId("org.jetbrains.kotlin.jvm") {

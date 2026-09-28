@@ -3,8 +3,8 @@ package dev.abdm.server.engine.api
 /**
  * Identifies who actually performs the downloads.
  *
- * Surfaced by `GET /api/v1/version` and on the About page, so a user always knows
- * whether the ABDM engine or the built-in engine is running.
+ * Surfaced by `GET /api/v1/version` and on the About page so the pinned upstream
+ * version is visible.
  */
 data class EngineDescriptor(
     val name: String,

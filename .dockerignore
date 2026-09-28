@@ -46,6 +46,7 @@ docs/
 # The frontend's i18n gate reads the error-code catalogue from docs/api.md inside
 # the image's web stage, so that one file has to survive the filter.
 !docs/api.md
+!docs/upstream.md
 .idea/
 .vscode/
 *.iml
@@ -53,11 +54,13 @@ docs/
 Thumbs.db
 
 # --- upstream submodule + bridge -------------------------------------------
-# Only needed when building with -Pabdm.enabled=true: the sources are under
-# third_party/ab-download-manager and the exported runtime jars under
-# third_party/abdm-dist. The default image build compiles the stub and must not
-# pay for either in its context.
-third_party/
+# The default image consumes exported runtime jars from the pinned submodule.
+# Never send the upstream source tree or Gradle outputs to Docker.
+third_party/ab-download-manager/
+third_party/abdm-dist/*
+!third_party/abdm-dist/.gitkeep
+!third_party/abdm-dist/.abdm-pin
+!third_party/abdm-dist/*.jar
 
 # --- local secrets -----------------------------------------------------------
 # Everything, including .env: compose interpolates it on the host, and baking

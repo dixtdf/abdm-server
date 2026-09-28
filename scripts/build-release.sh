@@ -6,19 +6,17 @@
 #   scripts/build-release.sh [version]
 #
 # Produces:
-#   dist/server.jar            fat jar built with -Pabdm.enabled=false
+#   dist/server.jar            fat jar with the pinned ABDM engine
 #   dist/docker-compose.yml    the compose file shipped with the release
 #   dist/SHA256SUMS            checksums of both files above
 #
-# The ABDM adapter is intentionally off: release artifacts are the built-in
-# native engine only. Use `-Pabdm.enabled=true` locally if you need the bridge.
+# Always builds the pinned upstream ABDM bridge.
 # Windows: run through Git Bash or WSL (`bash scripts/build-release.sh`).
 # =============================================================================
 set -euo pipefail
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
-
 DIST="${REPO_ROOT}/dist"
 
 
@@ -50,14 +48,15 @@ step "frontend: npm run build"
 [ -d web/dist ] || die "web/dist was not produced"
 
 # --- 2. backend --------------------------------------------------------------
+step "AB Download Manager v1.10.4 bridge"
+"${REPO_ROOT}/scripts/build-abdm-bridge.sh"
 step "backend: :server:app:shadowJar"
-./gradlew --no-daemon -Pabdm.enabled=false -Pproject.version="${VERSION}" :server:app:shadowJar
+./gradlew --no-daemon -Pproject.version="${VERSION}" :server:app:shadowJar
 
 [ -f "${APP_JAR_PATH}" ] || die "fat jar not found at ${APP_JAR_PATH}"
 
 # --- 3. stage dist/ ----------------------------------------------------------
 step "staging ${DIST#"${REPO_ROOT}/"}/"
-rm -rf "${DIST}"
 mkdir -p "${DIST}"
 cp "${APP_JAR_PATH}" "${DIST}/server.jar"
 cp docker-compose.yml "${DIST}/docker-compose.yml"

@@ -9,7 +9,7 @@
 //
 // The task copies `core-desktop.jar` plus its desktop runtime classpath into the
 // dist directory, which is what `:server:engine-abdm` compiles against when
-// `-Pabdm.enabled=true`. Upstream stays untouched and our build only needs a
+// Upstream stays untouched and our build only needs a
 // plain JVM classpath.
 //
 // Written in Groovy on purpose: init scripts are evaluated very early and the

@@ -7,14 +7,9 @@ import dev.abdm.server.engine.api.TaskRepository
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Compiled when `-Pabdm.enabled=true`: the adapter runs against the real
- * AB Download Manager classes exported to `third_party/abdm-dist`.
+ * Adapter for AB Download Manager classes exported to `third_party/abdm-dist`.
  */
 object AbdmEngineFactory {
-
-    fun isAvailable(): Boolean = true
-
-    fun unavailableReason(): String = ""
 
     fun descriptor(): EngineDescriptor = EngineDescriptor(
         name = AbdmEngineInfo.ENGINE_NAME,

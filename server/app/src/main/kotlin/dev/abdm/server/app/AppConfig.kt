@@ -14,7 +14,6 @@ import java.nio.file.Path
  * ABDM_CONFIG_DIR    /config      (SQLite + ABDM state)
  * ABDM_DOWNLOAD_ROOT /downloads   (the only writable area of the API)
  * ABDM_WEB_DIR       /app/web     (built frontend; embedded in the jar as fallback)
- * ABDM_ENGINE        native|abdm
  * ABDM_AUTH_MODE     none|token
  * ABDM_AUTH_TOKEN    shared secret when AUTH_MODE=token
  * ABDM_LOG_LEVEL     info
@@ -27,7 +26,6 @@ data class AppConfig(
     val configDir: Path = Path.of("/config"),
     val downloadRoot: Path = Path.of("/downloads"),
     val webDir: Path? = null,
-    val engine: String = "native",
     val authMode: String = "none",
     val authToken: String? = null,
     val logLevel: String = "info",
@@ -40,6 +38,10 @@ data class AppConfig(
             fun value(vararg keys: String): String? =
                 keys.firstNotNullOfOrNull { env[it]?.takeIf { v -> v.isNotBlank() } }
 
+            require(value("ABDM_ENGINE")?.lowercase() in listOf(null, "abdm")) {
+                "ABDM_ENGINE only accepts 'abdm'; the native engine has been removed."
+            }
+
             val defaultConfigDir = if (isWindows()) "config" else "/config"
             val defaultDownloadRoot = if (isWindows()) "downloads" else "/downloads"
 
@@ -50,7 +52,6 @@ data class AppConfig(
                 downloadRoot = Path.of(value("ABDM_DOWNLOAD_ROOT") ?: defaultDownloadRoot)
                     .toAbsolutePath().normalize(),
                 webDir = value("ABDM_WEB_DIR")?.let { Path.of(it).toAbsolutePath().normalize() },
-                engine = (value("ABDM_ENGINE") ?: "native").lowercase(),
                 authMode = (value("ABDM_AUTH_MODE", "AUTH_MODE") ?: "none").lowercase(),
                 authToken = value("ABDM_AUTH_TOKEN", "AUTH_TOKEN"),
                 logLevel = (value("ABDM_LOG_LEVEL") ?: "info").lowercase(),

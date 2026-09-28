@@ -72,7 +72,6 @@ function Start-DownloadServer {
     $env:ABDM_CONFIG_DIR = $config
     $env:ABDM_DOWNLOAD_ROOT = $downloads
     $env:ABDM_AUTH_MODE = 'none'
-    $env:ABDM_ENGINE = 'native'
     $env:ABDM_LOG_LEVEL = 'warn'
     Start-Process -PassThru -WindowStyle Hidden java -ArgumentList '-jar', $jar.FullName
 }
@@ -81,6 +80,7 @@ Write-Step "2. starting the download server"
 $server = Start-DownloadServer
 Wait-For { try { (Get-Api '/health').status -eq 'ok' } catch { $false } } 60 'server health'
 $version = Get-Api '/version'
+if ($version.engine -ne 'abdm') { throw "expected abdm engine, got $($version.engine)" }
 Write-Host "engine   : $($version.engine) $($version.engineVersion), api $($version.apiVersion), version $($version.version)"
 
 Write-Step "3. creating a download with 8 connections"

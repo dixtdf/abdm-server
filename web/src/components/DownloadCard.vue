@@ -15,13 +15,17 @@ import StatusPill from './StatusPill.vue'
 import { useFormat } from '../composables/useFormat'
 import { isPausable, isResumable, type Task } from '../api/types'
 
-const props = defineProps<{ task: Task }>()
+const props = withDefaults(defineProps<{ task: Task; view?: 'list' | 'card'; selected?: boolean }>(), {
+  view: 'card',
+  selected: false,
+})
 
 const emit = defineEmits<{
   pause: [id: string]
   resume: [id: string]
   remove: [id: string]
   details: [id: string]
+  select: [id: string, selected: boolean]
 }>()
 
 const { t } = useI18n()
@@ -66,12 +70,22 @@ const sizeTitle = computed(() => `${t('download.downloaded')} / ${t('download.to
 <template>
   <article
     class="card download"
+    :class="[`download--${view}`, { 'download--selected': selected }]"
+    :data-task-id="task.id"
     tabindex="0"
     :aria-label="task.fileName"
     @click="emit('details', task.id)"
     @keydown.enter.prevent="emit('details', task.id)"
   >
     <header class="download__head">
+      <label class="download__select" @click.stop @pointerdown.stop>
+        <input
+          type="checkbox"
+          :checked="selected"
+          :aria-label="t('download.selectTask', { name: task.fileName })"
+          @change="emit('select', task.id, ($event.target as HTMLInputElement).checked)"
+        />
+      </label>
       <span class="download__icon" aria-hidden="true"><IconFile /></span>
 
       <div class="download__titles">
@@ -158,6 +172,51 @@ const sizeTitle = computed(() => `${t('download.downloaded')} / ${t('download.to
 .download:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-card-hover);
+}
+
+.download--selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.download__select {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.download__select input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.download--list {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(140px, 0.8fr) minmax(260px, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-medium);
+}
+
+.download--list .download__head { min-width: 0; }
+.download--list .download__progress { margin: 0; }
+.download--list .download__meta { gap: var(--space-2); }
+
+@media (max-width: 1200px) {
+  .download--list {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr);
+  }
+  .download--list .download__meta { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .download--list { grid-template-columns: minmax(0, 1fr); }
+  .download--list .download__meta { grid-column: 1; }
 }
 
 .download__head {

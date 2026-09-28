@@ -3,8 +3,8 @@
 **简体中文** | [English](README_en.md)
 
 自托管的下载管理器：一个 JVM 进程同时提供 REST/WebSocket API 与打包好的 Web 界面，
-面向局域网（LAN-first）部署，默认使用内置的分段下载引擎，也可以切换到
-AB Download Manager 作为后端引擎。
+面向局域网（LAN-first）部署，使用固定在 v1.10.4 的 AB Download Manager
+作为唯一下载引擎。
 
 - 版本：`0.2.0`
 - 仓库：<https://github.com/dixtdf/abdm-server>
@@ -16,8 +16,7 @@ AB Download Manager 作为后端引擎。
 
 ## 功能特性 Features
 
-- **多连接分段下载**：单任务 1–256 连接，range 规划 + 已完成区间检查点（interval set），
-  边下边改连接数、断点续传、重启恢复走同一条路径。
+- **多连接分段下载**：单任务 1–256 连接；由上游 ABDM 管理分片、连接数调整与断点续传。
 - **任务队列与并发控制**：`maxConcurrentDownloads` 控制同时下载数，其余任务排队并报告
   `queuePosition`。
 - **实时进度**：进度通过 WebSocket 推送（`download.progress` / `download.state` / …），
@@ -26,10 +25,9 @@ AB Download Manager 作为后端引擎。
   通过 `download.parts` 帧推送；下载中改连接数会重划分片，已下载字节保留、数字不归零。
 - **限速**：全局 `globalSpeedLimit` 与单任务 `speedLimit`。
 - **HLS、校验和、代理、自定义请求头 / Cookie / Referer / User-Agent**：按任务粒度配置。
-- **持久化**：SQLite（WAL）保存任务、进度检查点、历史记录与设置，
-  进程重启后自动恢复（可配置）。
-- **引擎可插拔**：内置 `engine-native`，或编译期切换到 `engine-abdm` 适配层
-  （`-Pabdm.enabled=true`）。API、数据库与前端都不感知引擎差异。
+- **持久化**：ABDM 保存下载和分片状态；SQLite（WAL）保存服务端设置、队列与 API 记录，
+  进程重启后可自动恢复未完成任务。
+- **上游引擎**：下载任务由固定版本的 AB Download Manager 运行时执行。
 - **多语言界面**：`en-US` / `zh-CN`，错误码与文案分离（见 [docs/i18n.md](docs/i18n.md)）。
 - **多架构镜像**：`linux/amd64` + `linux/arm64`。
 
@@ -106,21 +104,23 @@ AB Download Manager 作为后端引擎。
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"0.1.0","engine":"native"}
+   # {"status":"ok","uptimeSeconds":3,"version":"0.2.0","engine":"abdm"}
    ```
 
 4. 打开 `http://<局域网 IP>:6868`。
 
-使用本地构建的镜像：`docker build -t abdm-server:local .`，然后按
+使用本地构建的镜像：先执行 `git submodule update --init third_party/ab-download-manager`
+和 `bash scripts/build-abdm-bridge.sh`，再运行 `docker build -t abdm-server:local .`，然后按
 `docker-compose.yml` 顶部注释里的 override 方式把 `image` 指向 `abdm-server:local`。
 
 ### 方式二：本地开发（前后端分开）
 
-前置条件：JDK 17、Node 22+。默认（`native` 引擎）不需要别的东西；如果要编译
-`engine-abdm` 适配层，还需要 JDK 25（上游固定 `jvm.toolchain=25`）和 Android SDK，
-并先用 `bash scripts/build-abdm-bridge.sh` 导出上游运行时（见下文）。
+前置条件：JDK 17、Node 22+。默认 ABDM 构建还需要 Android SDK，以及先运行
+`git submodule update --init third_party/ab-download-manager` 和
+`bash scripts/build-abdm-bridge.sh` 导出上游运行时。导出脚本通过构建参数将
+v1.10.4 编译成 Java 17 字节码，无需修改子模块源码。
 
-后端（默认 `native` 引擎，端口 6868）：
+后端（默认 `abdm` 引擎，端口 6868）：
 
 ```bash
 # Linux / macOS
@@ -165,9 +165,12 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 | `ABDM_AUTH_MODE` | `none` | `none` 或 `token`；`none` 时启动会打印醒目告警 |
 | `ABDM_AUTH_TOKEN` | 空 | `AUTH_MODE=token` 时必填；除 `/api/v1/health` 外所有路由要求 `Authorization: Bearer <token>`，WebSocket 额外接受 `?token=<token>` |
 | `ABDM_WEB_DIR` | `/app/web` | 前端构建产物目录；镜像内固定为 `/app/web` |
-| `ABDM_ENGINE` | `native` | `native`（内置引擎）或 `abdm`（需以 `-Pabdm.enabled=true` 构建） |
 | `ABDM_LOG_LEVEL` | `info` | 日志级别（`debug` / `info` / `warn` / `error`） |
 | `TZ` | `Asia/Shanghai` | 容器时区，仅影响日志与展示 |
+
+从旧 native 版本升级前，请先备份 `/config` 与下载目录。旧任务 ID 和分片状态
+不能由 ABDM 直接恢复；数据库仍含旧任务时，新版本会拒绝启动并给出提示，
+需要先迁移或清理旧记录。
 
 ### 服务端设置 Server settings
 
@@ -232,8 +235,7 @@ server/app          Ktor 启动、依赖装配、静态资源
 server/web-api      REST + WebSocket 路由与 DTO 映射（契约见 docs/api.md）
 server/scheduler    队列、并发、状态机、重启恢复
 server/engine-api   引擎端口：DownloadEngine / EngineEvent / PathGuard / 存储接口
-server/engine-native 内置分段下载引擎（默认，始终参与构建）
-server/engine-abdm   AB Download Manager 适配层（可选，abdm.enabled=true）
+server/engine-abdm   AB Download Manager 适配层（唯一下载引擎）
 server/persistence  SQLite（WAL）存储
 web/                Vue 3 + Vite 前端
 third_party/ab-download-manager   上游子模块（只读，从不修改）
@@ -248,9 +250,8 @@ docs/               api.md / architecture.md / i18n.md / upstream.md
 ## 上游引擎与子模块 Upstream
 
 - 固定 `AB Download Manager v1.10.4`，commit `afc57634b3c121c6415213242b2b600cccc6fd6e`。
-- 默认构建 `-Pabdm.enabled=false`：适配层编译为 stub，服务只用内置引擎，**不需要 Android SDK**。
-- `-Pabdm.enabled=true` 才会真正编译适配层，并且它编译的是 `scripts/build-abdm-bridge.sh`
-  导出到 `third_party/abdm-dist/` 的上游运行时 jar（导出那一步需要 JDK 25 + Android SDK）。
+- 所有构建使用脚本导出的 v1.10.4 上游运行时 JAR；
+  导出需要 Android SDK，使用构建参数目标 Java 17。
 - `third_party/ab-download-manager` **永远不修改**；所有适配代码都在 `server/engine-abdm/`。
 - 升级流程、兼容性检查清单见 [docs/upstream.md](docs/upstream.md)。
 
@@ -273,10 +274,11 @@ scripts/build-release.sh       # 构建前端 + fat jar，生成 dist/SHA256SUMS
 后端：
 
 ```bash
-./gradlew build -Pabdm.enabled=false                                     # 编译 + 单元测试
-bash scripts/build-abdm-bridge.sh                                        # 导出上游运行时（JDK 25 + Android SDK）
-./gradlew -Pabdm.enabled=true :server:engine-abdm:test                   # AbdmCompatibilityTest
-./gradlew --no-daemon -Pabdm.enabled=false :server:app:shadowJar         # 生成 fat jar
+git submodule update --init third_party/ab-download-manager              # 固定 v1.10.4
+bash scripts/build-abdm-bridge.sh                                        # 导出 Java 17 上游运行时
+./gradlew build                                                         # 含 ABDM 兼容性测试
+./gradlew :server:engine-abdm:test                                       # AbdmCompatibilityTest
+./gradlew --no-daemon :server:app:shadowJar                              # 生成 fat jar
 ```
 
 前端（在 `web/` 下）：
@@ -323,9 +325,8 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 `scripts/acceptance-test.ps1` 会依次验证：1/8/64/256 连接下载、下载中改连接数、
 暂停 → 重启 → 续传、校验和一致，并打印每一步的实测结果。
 
-单元测试侧，`server/engine-native` 里的 `NativeDownloadEngineTest` 用同一个思路在进程内跑
-（自带 Range 服务器），其中 `a restart resumes from the sqlite checkpoint instead of starting over`
-就是“重启后续传”的回归测试；`AbdmCompatibilityTest` 则用真实 ABDM 引擎跑同一组场景。
+`AbdmCompatibilityTest` 使用本地 Range 服务器和真实 ABDM 引擎验证下载、暂停、
+重启恢复与分片连接能力。
 
 ---
 
@@ -370,7 +371,7 @@ tag: v0.2.0（打在 ref 指向的提交上）
 本地自检可用与环境无关的方式复核版本号确实进了产物：
 
 ```bash
-./gradlew -Pabdm.enabled=false -Pproject.version=0.2.0 :server:app:fatJar
+./gradlew -Pproject.version=0.2.0 :server:app:fatJar
 java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 0.2.0
 ```
 

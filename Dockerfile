@@ -9,12 +9,9 @@
 # Build:
 #   docker build -t abdm-server:0.1.0 .
 #
-# The AB Download Manager adapter stays OFF in the image
-# (-Pabdm.enabled=false): the server uses its built-in native engine, no
-# Android SDK is needed, and no Node/Gradle/source ever reaches the runtime
-# stage. Building with the bridge enabled would additionally need
-# third_party/abdm-dist (exported by scripts/build-abdm-bridge.sh) in the
-# context, and both third_party/ paths are excluded below.
+# The default image uses the pinned AB Download Manager v1.10.4 bridge.
+# Run scripts/build-abdm-bridge.sh before docker build. The exported JVM 17
+# jars enter this build context; upstream sources and Android SDK do not.
 #
 # Runtime contract: HTTP 6868, health probe GET /api/v1/health,
 # SQLite (WAL) at /config/database.sqlite, writable /config and /downloads.
@@ -64,23 +61,29 @@ WORKDIR /build
 COPY gradlew ./
 COPY gradle/ gradle/
 COPY settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY docs/upstream.md docs/upstream.md
 COPY server/app/build.gradle.kts server/app/
 COPY server/engine-api/build.gradle.kts server/engine-api/
-COPY server/engine-native/build.gradle.kts server/engine-native/
 COPY server/engine-abdm/build.gradle.kts server/engine-abdm/
 COPY server/persistence/build.gradle.kts server/persistence/
 COPY server/scheduler/build.gradle.kts server/scheduler/
 COPY server/web-api/build.gradle.kts server/web-api/
+COPY third_party/abdm-dist/ third_party/abdm-dist/
 
 RUN chmod +x gradlew
 
 # Warms the dependency cache into the layer above, so source-only edits reuse it.
-RUN ./gradlew --no-daemon -Pabdm.enabled=false :server:app:dependencies
+RUN test -s third_party/abdm-dist/core-desktop.jar && \
+    test -s third_party/abdm-dist/.abdm-pin || \
+    { echo 'ABDM bridge missing: run scripts/build-abdm-bridge.sh first' >&2; exit 1; }
+RUN test "$(cat third_party/abdm-dist/.abdm-pin)" = "$(sed -n 's/^UPSTREAM_COMMIT=//p' docs/upstream.md)" || \
+    { echo 'ABDM bridge pin mismatch: rebuild the bridge from the pinned tag' >&2; exit 1; }
+RUN ./gradlew --no-daemon :server:app:dependencies
 
 # -- layer 2: sources -------------------------------------------------------
 COPY server/ server/
 
-RUN ./gradlew --no-daemon --stacktrace -Pabdm.enabled=false :server:app:shadowJar
+RUN ./gradlew --no-daemon --stacktrace :server:app:shadowJar
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ package dev.abdm.server.app
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AppConfigTest {
@@ -12,29 +13,34 @@ class AppConfigTest {
         val config = AppConfig.fromEnvironment(emptyMap())
         assertEquals(6868, config.port)
         assertEquals("none", config.authMode)
-        assertEquals("native", config.engine)
     }
 
     @Test
-    fun `reads port, auth and engine from the environment`() {
+    fun `reads port and auth from the environment`() {
         val config = AppConfig.fromEnvironment(
             mapOf(
                 "PORT" to "7000",
                 "ABDM_AUTH_MODE" to "token",
                 "ABDM_AUTH_TOKEN" to "***",
-                "ABDM_ENGINE" to "abdm",
                 "ABDM_LOG_LEVEL" to "debug",
             ),
         )
         assertEquals(7000, config.port)
         assertEquals("token", config.authMode)
-        assertEquals("abdm", config.engine)
         assertEquals("debug", config.logLevel)
     }
 
     @Test
     fun `a bad port falls back to the default instead of crashing`() {
         assertEquals(6868, AppConfig.fromEnvironment(mapOf("PORT" to "not-a-number")).port)
+    }
+
+    @Test
+    fun `legacy native engine setting is rejected`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            AppConfig.fromEnvironment(mapOf("ABDM_ENGINE" to "native"))
+        }
+        assertTrue(error.message.orEmpty().contains("native engine has been removed"))
     }
 
     @Test

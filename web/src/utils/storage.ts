@@ -45,5 +45,6 @@ export const STORAGE_KEYS = {
   theme: 'ui.theme',
   locale: 'ui.locale',
   units: 'ui.units',
+  downloadsView: 'ui.downloadsView',
   token: 'api.token',
 } as const

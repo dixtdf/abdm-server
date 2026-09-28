@@ -9,8 +9,6 @@ import dev.abdm.server.engine.api.DownloadState
 import dev.abdm.server.engine.api.ServerSettings
 import dev.abdm.server.engine.api.SettingsRepository
 import dev.abdm.server.engine.api.TaskRepository
-import dev.abdm.server.engine.native.NativeDownloadEngine
-import dev.abdm.server.engine.native.NativeEngineConfig
 import dev.abdm.server.persistence.SqliteQueueRepository
 import dev.abdm.server.persistence.SqliteSettingsRepository
 import dev.abdm.server.persistence.SqliteStore
@@ -75,6 +73,11 @@ internal fun serverVersion(): String =
     DownloadServer::class.java.`package`?.implementationVersion?.takeIf { it.isNotBlank() }
         ?: FALLBACK_VERSION
 
+// The former native engine generated 16-character lowercase hexadecimal task IDs;
+// upstream ABDM uses decimal IDs and keeps its own part metadata. They cannot be
+// resumed by merely pointing the new engine at the same SQLite database.
+private val NATIVE_TASK_ID = Regex("^[0-9a-f]{16}$")
+
 class DownloadServer(private val config: AppConfig) {
 
     private val log = LoggerFactory.getLogger(DownloadServer::class.java)
@@ -112,6 +115,12 @@ class DownloadServer(private val config: AppConfig) {
         }
         settingsRepository.save(settings)
 
+        val nativeCount = taskRepository.loadAll().count { NATIVE_TASK_ID.matches(it.id) }
+        check(nativeCount == 0) {
+            "Cannot start ABDM: $nativeCount legacy native task(s) remain in " +
+                "${config.configDir}. Back up /config and /downloads, then migrate or " +
+                "remove those records before starting this ABDM-only build."
+        }
         engine = createEngine()
         scheduler = DownloadScheduler(
             engine = engine,
@@ -169,16 +178,9 @@ class DownloadServer(private val config: AppConfig) {
     }
 
     private suspend fun restore() {
-        val bridge = engine as? AbdmEngineBridge
-        val resumable: List<String> = when (val current = engine) {
-            is NativeDownloadEngine -> current.restore()
-            else -> {
-                val restored = bridge?.boot().orEmpty()
-                if (restored.isNotEmpty()) {
-                    log.info("ABDM engine restored {} unfinished task(s)", restored.size)
-                }
-                restored
-            }
+        val resumable = (engine as AbdmEngineBridge).boot()
+        if (resumable.isNotEmpty()) {
+            log.info("ABDM engine restored {} unfinished task(s)", resumable.size)
         }
         scheduler.restore()
         if (settings.resumeOnStartup) {
@@ -192,51 +194,22 @@ class DownloadServer(private val config: AppConfig) {
     }
 
     private fun createEngine(): DownloadEngine {
-        val root = config.downloadRoot
-        return when (config.engine) {
-            "abdm" -> {
-                if (!AbdmEngineFactory.isAvailable()) {
-                    throw IllegalStateException(
-                        "ABDM_ENGINE=abdm but this build has no AB Download Manager bridge: " +
-                            AbdmEngineFactory.unavailableReason(),
-                    )
-                }
-                log.info("using the AB Download Manager engine ({})", AbdmEngineFactory.descriptor().upstreamVersion)
-                AbdmEngineFactory.create(
-                    config = AbdmEngineConfig(
-                        downloadRoot = root,
-                        dataFolder = config.abdmDataFolder,
-                        defaultConnections = settings.defaultConnections,
-                        progressIntervalMs = settings.progressIntervalMs,
-                    ),
-                    scope = scope,
-                    repository = taskRepository,
-                    settingsProvider = { settings },
-                )
-            }
-            "native" -> {
-                log.info("using the built-in segmented engine")
-                NativeDownloadEngine(
-                    config = NativeEngineConfig(
-                        downloadRoot = root,
-                        defaultConnections = settings.defaultConnections,
-                        progressIntervalMs = settings.progressIntervalMs,
-                    ),
-                    scope = scope,
-                    repository = taskRepository,
-                    settingsProvider = { settings },
-                )
-            }
-            else -> throw IllegalStateException("unknown ABDM_ENGINE '${config.engine}' (use native or abdm)")
-        }
+        log.info("using the AB Download Manager engine ({})", AbdmEngineFactory.descriptor().upstreamVersion)
+        return AbdmEngineFactory.create(
+            config = AbdmEngineConfig(
+                downloadRoot = config.downloadRoot,
+                dataFolder = config.abdmDataFolder,
+                defaultConnections = settings.defaultConnections,
+                progressIntervalMs = settings.progressIntervalMs,
+            ),
+            scope = scope,
+            repository = taskRepository,
+            settingsProvider = { settings },
+        )
     }
 
     private fun applyEngineSettings(updated: ServerSettings) {
-        when (val current = engine) {
-            is NativeDownloadEngine -> current.setGlobalSpeedLimit(updated.globalSpeedLimit)
-            is AbdmEngineBridge -> current.applySettings(updated)
-            else -> Unit
-        }
+        (engine as AbdmEngineBridge).applySettings(updated)
     }
 
     suspend fun stop() {

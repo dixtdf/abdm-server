@@ -37,7 +37,7 @@ describe('downloads store reducer', () => {
     const tasks = [makeTask({ id: 'a' }), makeTask({ id: 'b' })]
     const event: ServerEvent = {
       type: 'hello',
-      server: { version: '0.1.0', engine: 'native', apiVersion: 'v1' },
+      server: { version: '0.1.0', engine: 'abdm', apiVersion: 'v1' },
       tasks,
     }
     expect(applyEvent([], event)).toEqual(tasks)

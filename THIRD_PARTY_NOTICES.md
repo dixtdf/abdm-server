@@ -19,10 +19,8 @@ follow their work, and `server/engine-abdm/` reuses their runtime directly.
   adapter (`server/engine-abdm/`) compiles against an exported slice of the
   upstream desktop runtime (`core-desktop.jar`, `utils-desktop.jar`,
   `platform-desktop.jar` and their transitive dependencies) produced by
-  `scripts/build-abdm-bridge.sh` into `third_party/abdm-dist/`. That export
-  happens only when the build is run with `-Pabdm.enabled=true`; the default
-  build and the published container image use the built-in native engine and
-  contain no upstream artifact.
+  `scripts/build-abdm-bridge.sh` into `third_party/abdm-dist/`. Every server
+  build and published container image includes this upstream runtime.
 - Changes: none. The submodule is read-only in this repository and is never
   modified, patched or vendored. All adaptation happens in
   `server/engine-abdm/`. See `docs/upstream.md`.

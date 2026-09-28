@@ -13,7 +13,6 @@ application {
 
 dependencies {
     implementation(project(":server:engine-api"))
-    implementation(project(":server:engine-native"))
     implementation(project(":server:engine-abdm"))
     implementation(project(":server:persistence"))
     implementation(project(":server:scheduler"))

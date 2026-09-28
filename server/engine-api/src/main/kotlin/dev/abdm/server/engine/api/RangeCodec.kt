@@ -3,8 +3,8 @@ package dev.abdm.server.engine.api
 /**
  * Text codec for a list of half open byte ranges: `0-1024,2048-4096`.
  *
- * Stored in SQLite so that a restarted process knows byte exactly what is already
- * on disk. Shared by the native engine and the persistence module.
+ * Kept for reading and writing the existing SQLite task schema. ABDM itself
+ * owns transfer checkpoints in its upstream data directory.
  */
 object RangeCodec {
     fun encode(ranges: List<LongRange>): String =
