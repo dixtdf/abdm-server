@@ -3,7 +3,6 @@ package dev.abdm.server.app
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AppConfigTest {
@@ -36,11 +35,8 @@ class AppConfigTest {
     }
 
     @Test
-    fun `legacy native engine setting is rejected`() {
-        val error = assertFailsWith<IllegalArgumentException> {
-            AppConfig.fromEnvironment(mapOf("ABDM_ENGINE" to "native"))
-        }
-        assertTrue(error.message.orEmpty().contains("native engine has been removed"))
+    fun `legacy engine setting does not prevent startup configuration`() {
+        assertEquals(6868, AppConfig.fromEnvironment(mapOf("ABDM_ENGINE" to "native")).port)
     }
 
     @Test

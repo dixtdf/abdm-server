@@ -3,7 +3,7 @@
 ## 安装与配置
 
 1. 更新并运行包含本仓库 Cookie 转发修复的 ABDM Server。
-2. 在 Chrome 打开 `chrome://extensions`，启用“开发者模式”，选择“加载已解压的扩展程序”，选择本目录 `browser-extension`。
+2. 从 GitHub Release 下载 `abdm-server-chrome-extension-<版本>.zip` 并解压；在 Chrome 打开 `chrome://extensions`，启用“开发者模式”，选择“加载已解压的扩展程序”，选择解压目录。源码开发时可直接选择本目录 `browser-extension`。
 3. 点击扩展图标，进入“设置”；填写协议、服务器 IP/主机名、端口（默认 `6868`）和 API Token，保存并测试连接。
 4. 配置完成后，默认接管所有普通 HTTP(S) 下载；弹出窗口的开关可以随时停用或启用接管。在设置页可改为“仅接管列表中的扩展名”：已预置 100 多种常见扩展名（含 `sig`、`iso`、`zip`、`exe`、`mp4`、`pdf` 等），可继续添加。模式和列表也随配置同步。
 5. 在网页链接上点击右键，选择“使用 ABDM Server 下载链接”，可直接把链接交给服务端；即使自动接管关闭也可以使用。
@@ -28,6 +28,12 @@
 - 服务器在接受任务后如果网络连接中断，客户端可能无法确认是否创建成功；弹出窗口会提示检查重复任务。此时 Chrome 会继续下载。
 
 ## 开发验证
+
+发布打包只包含运行所需文件，ZIP 内根目录就是 `manifest.json`。在仓库根目录运行：
+
+```powershell
+python scripts/package-browser-extension.py 1.0.1 dist
+```
 
 ```powershell
 cd browser-extension

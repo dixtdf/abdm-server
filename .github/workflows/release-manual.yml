@@ -148,6 +148,10 @@ jobs:
           npm run typecheck
           npm run test
 
+      - name: Chrome extension tests
+        working-directory: browser-extension
+        run: npm test
+
       # --- artifacts ---------------------------------------------------------
       - name: Build frontend and fat jar for ${{ steps.release.outputs.version }}
         run: |
@@ -169,7 +173,9 @@ jobs:
           mkdir -p dist
           cp "$jar" dist/server.jar
           cp docker-compose.yml dist/docker-compose.yml
-          ( cd dist && sha256sum server.jar docker-compose.yml > SHA256SUMS && cat SHA256SUMS )
+          python3 scripts/package-browser-extension.py "$version" dist
+          extension="abdm-server-chrome-extension-${version}.zip"
+          ( cd dist && sha256sum server.jar docker-compose.yml "$extension" > SHA256SUMS && cat SHA256SUMS )
 
       - name: Verify the jar reports the released version
         run: |
@@ -251,6 +257,7 @@ jobs:
           files: |
             dist/server.jar
             dist/docker-compose.yml
+            dist/abdm-server-chrome-extension-${{ steps.release.outputs.version }}.zip
             dist/SHA256SUMS
           body: |
             ## abdm-server ${{ steps.release.outputs.tag }}
@@ -271,7 +278,8 @@ jobs:
             | --- | --- |
             | `server.jar` | Executable fat jar (`java -jar server.jar`) |
             | `docker-compose.yml` | Compose file matching this release |
-            | `SHA256SUMS` | SHA-256 checksums of the two files above |
+            | `abdm-server-chrome-extension-${{ steps.release.outputs.version }}.zip` | Chrome extension; extract and load the folder in Developer mode |
+            | `SHA256SUMS` | SHA-256 checksums of the three files above |
 
             Verify before running:
 

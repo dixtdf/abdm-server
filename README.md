@@ -6,7 +6,7 @@
 面向局域网（LAN-first）部署，使用固定在 v1.10.4 的 AB Download Manager
 作为唯一下载引擎。
 
-- 版本：`1.0.0`
+- 版本：`1.0.1`
 - 仓库：<https://github.com/dixtdf/abdm-server>
 - 许可证：[Apache-2.0](LICENSE)
 - 上游引擎：[AB Download Manager](https://github.com/amir1376/ab-download-manager)
@@ -81,7 +81,7 @@
 
    ```dotenv
    IMAGE_OWNER=dixtdf        # 或你自己的 fork
-   IMAGE_TAG=latest          # 或 edge / 1.0.0
+   IMAGE_TAG=latest          # 或 edge / 1.0.1
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # 或 token
    AUTH_TOKEN=               # AUTH_MODE=token 时填写
@@ -105,7 +105,7 @@
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"1.0.0","engine":"abdm"}
+   # {"status":"ok","uptimeSeconds":3,"version":"1.0.1","engine":"abdm"}
    ```
 
 4. 打开 `http://<局域网 IP>:6868`。
@@ -168,6 +168,8 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 | `ABDM_WEB_DIR` | `/app/web` | 前端构建产物目录；镜像内固定为 `/app/web` |
 | `ABDM_LOG_LEVEL` | `info` | 日志级别（`debug` / `info` / `warn` / `error`） |
 | `TZ` | `Asia/Shanghai` | 容器时区，仅影响日志与展示 |
+
+`ABDM_ENGINE` 已废弃；即使旧 Docker 或 `java -jar` 启动配置仍传入该变量，服务端也会忽略它并使用上游 ABDM 引擎。建议从部署配置中删除该变量。
 
 从旧 native 版本升级前，请先备份 `/config` 与下载目录。旧任务 ID 和分片状态
 不能由 ABDM 直接恢复；数据库仍含旧任务时，新版本会拒绝启动并给出提示，
@@ -341,39 +343,39 @@ powershell -ExecutionPolicy Bypass -File scripts/acceptance-test.ps1 -FileSizeMb
 
 | 输入 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `version` | 是 | – | 语义化版本，如 `1.0.0`（允许写成 `v1.0.0`） |
+| `version` | 是 | – | 语义化版本，如 `1.0.1`（允许写成 `v1.0.1`） |
 | `ref` | 是 | `main` | 要构建并打 tag 的分支 / tag / commit |
 | `prerelease` | 否 | `false` | 标记为预发布 |
 | `push_latest` | 否 | `true` | 是否同时移动 `:latest` 镜像标签 |
 | `dry_run` | 否 | `false` | 只验证与构建，不推镜像、不打 tag、不发 Release |
 
 3. 流程依次执行：校验版本与重名 tag → checkout `ref`（含子模块）→ 后端 `build`、
-   前端 `i18n:check / lint / typecheck / test` → 构建带版本号的 fat jar（`-Pproject.version=`，
-   并用 `java -jar server.jar --print-version` 复核）→ 生成 `SHA256SUMS` →
+   前端 `i18n:check / lint / typecheck / test` 与 Chrome 扩展测试 → 构建带版本号的 fat jar（`-Pproject.version=`，
+   并用 `java -jar server.jar --print-version` 复核）→ 打包扩展 ZIP、生成 `SHA256SUMS` →
    推送多架构镜像（`linux/amd64` + `linux/arm64`）→ 打 tag → 创建 Release
-   （附件 `server.jar`、`docker-compose.yml`、`SHA256SUMS`）。
+   （附件 `server.jar`、`docker-compose.yml`、`abdm-server-chrome-extension-<版本>.zip`、`SHA256SUMS`）。
 
 产物：
 
 ```text
-ghcr.io/dixtdf/abdm-server:1.0.0     # 版本
+ghcr.io/dixtdf/abdm-server:1.0.1     # 版本
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # push_latest=true 时
-tag: v1.0.0（打在 ref 指向的提交上）
+tag: v1.0.1（打在 ref 指向的提交上）
 ```
 
 两点说明：
 
 1. tag 是**最后一步**创建的——验证或镜像构建失败不会留下半成品 tag。
 2. 镜像与 Release 都由这个流程负责，仓库里不再有"推送 tag 自动发版"的工作流；
-   手动 `git push origin v1.0.0` 只会创建一个 tag，不会发镜像也不会发 Release。
+   手动 `git push origin v1.0.1` 只会创建一个 tag，不会发镜像也不会发 Release。
    由 `GITHUB_TOKEN` 推送的 tag 不会触发其他 workflow，所以 Release 也由本流程自己创建。
 
 本地自检可用与环境无关的方式复核版本号确实进了产物：
 
 ```bash
-./gradlew -Pproject.version=1.0.0 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.0
+./gradlew -Pproject.version=1.0.1 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.1
 ```
 
 改动版本号（一次改完 Gradle 版本目录、前端 `package.json`/`package-lock.json`、
@@ -381,10 +383,10 @@ java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0
 
 ```powershell
 # 先看要改什么，不写文件
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.0 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.1 -DryRun
 
 # 真改，并可选提交/打 tag/推送
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.0 -Commit -Tag
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.1 -Commit -Tag
 ```
 
 ---

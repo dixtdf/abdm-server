@@ -53,6 +53,9 @@ fun main(args: Array<String>) {
         return
     }
 
+    if (!System.getenv("ABDM_ENGINE").isNullOrBlank()) {
+        System.err.println("ABDM_ENGINE is obsolete and ignored; the upstream ABDM engine is always used.")
+    }
     val config = AppConfig.fromEnvironment()
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", config.logLevel)
 
@@ -337,4 +340,4 @@ class DownloadServer(private val config: AppConfig) {
 }
 
 /** Version this source tree declares; a release jar overrides it from the manifest. */
-private const val FALLBACK_VERSION = "1.0.0"
+private const val FALLBACK_VERSION = "1.0.1"

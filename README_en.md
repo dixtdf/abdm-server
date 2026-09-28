@@ -6,7 +6,7 @@ A self-hosted download manager: one JVM process that serves both the REST/WebSoc
 and a bundled web UI. It is built for LAN-first deployments and uses pinned AB Download
 Manager v1.10.4 as its only download engine.
 
-- Version: `1.0.0`
+- Version: `1.0.1`
 - Repository: <https://github.com/dixtdf/abdm-server>
 - License: [Apache-2.0](LICENSE)
 - Upstream engine: [AB Download Manager](https://github.com/amir1376/ab-download-manager)
@@ -86,7 +86,7 @@ Manager v1.10.4 as its only download engine.
 
    ```dotenv
    IMAGE_OWNER=dixtdf        # or your own fork
-   IMAGE_TAG=latest          # or edge / 1.0.0
+   IMAGE_TAG=latest          # or edge / 1.0.1
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # or token
    AUTH_TOKEN=               # required when AUTH_MODE=token
@@ -110,7 +110,7 @@ Manager v1.10.4 as its only download engine.
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"1.0.0","engine":"abdm"}
+   # {"status":"ok","uptimeSeconds":3,"version":"1.0.1","engine":"abdm"}
    ```
 
 4. Open `http://<LAN IP>:6868`.
@@ -175,6 +175,8 @@ ABDM_CONFIG_DIR=./.local/config ABDM_DOWNLOAD_ROOT=./.local/downloads ./gradlew 
 | `ABDM_WEB_DIR` | `/app/web` | Directory holding the built frontend; `/app/web` inside the image |
 | `ABDM_LOG_LEVEL` | `info` | Log level (`debug` / `info` / `warn` / `error`) |
 | `TZ` | `Asia/Shanghai` | Container timezone (logs and display only) |
+
+`ABDM_ENGINE` is obsolete. The server ignores it in older Docker or `java -jar` configurations and always uses the upstream ABDM engine. Remove the variable from deployment settings when convenient.
 
 Before upgrading an older native installation, back up `/config` and the download
 directory. ABDM cannot directly resume the old task IDs and part state. The new
@@ -360,27 +362,27 @@ Release.
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `version` | yes | – | Semantic version such as `1.0.0` (a leading `v` is accepted) |
+| `version` | yes | – | Semantic version such as `1.0.1` (a leading `v` is accepted) |
 | `ref` | yes | `main` | Branch, tag or commit to build and tag |
 | `prerelease` | no | `false` | Mark the GitHub Release as a pre-release |
 | `push_latest` | no | `true` | Also move the `:latest` image tag |
 | `dry_run` | no | `false` | Verify and build only: no image push, no tag, no release |
 
 3. The job then: validates the version and refuses an existing tag → checks out `ref`
-   (with submodules) → runs the backend `build` and the frontend gates
-   (`i18n:check / lint / typecheck / test`) → builds the fat jar with the version baked in
-   (`-Pproject.version=`, re-checked with `java -jar server.jar --print-version`) → writes
-   `SHA256SUMS` → pushes the multi-arch image (`linux/amd64` + `linux/arm64`) → creates the
-   tag → creates the GitHub Release with `server.jar`, `docker-compose.yml` and
+   (with submodules) → runs the backend `build`, frontend gates and Chrome extension tests
+   → builds the versioned fat jar (verified with `java -jar server.jar --print-version`)
+   → packages the extension ZIP and writes `SHA256SUMS` → pushes the multi-arch image
+   (`linux/amd64` + `linux/arm64`) → creates the tag and GitHub Release with
+   `server.jar`, `docker-compose.yml`, `abdm-server-chrome-extension-<version>.zip` and
    `SHA256SUMS` attached.
 
 Produced artifacts:
 
 ```text
-ghcr.io/dixtdf/abdm-server:1.0.0     # version
+ghcr.io/dixtdf/abdm-server:1.0.1     # version
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # when push_latest=true
-tag: v1.0.0 (on the commit ref points at)
+tag: v1.0.1 (on the commit ref points at)
 ```
 
 Two notes:
@@ -388,15 +390,15 @@ Two notes:
 1. The tag is created **last**, so a failed verification or image build never leaves a tag
    behind.
 2. This workflow owns both the image and the release; there is no "release on tag push"
-   workflow any more, so pushing `v1.0.0` by hand only creates a tag - no image, no
+   workflow any more, so pushing a tag by hand only creates a tag - no image, no
    release. A tag pushed with `GITHUB_TOKEN` does not trigger other workflows, which is
    why this workflow also creates the release itself.
 
 To reproduce the version stamping locally:
 
 ```bash
-./gradlew -Pproject.version=1.0.0 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.0
+./gradlew -Pproject.version=1.0.1 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.1
 ```
 
 Bump the version (one command updates the Gradle catalog, the frontend
@@ -405,10 +407,10 @@ READMEs; everything else derives from those):
 
 ```powershell
 # show what would change, write nothing
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.0 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.1 -DryRun
 
 # apply, optionally commit / tag / push
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.0 -Commit -Tag
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.1 -Commit -Tag
 ```
 
 ---

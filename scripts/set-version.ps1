@@ -67,6 +67,7 @@ if ($clean -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
 }
 
 $root = Split-Path -Parent $PSScriptRoot
+$extensionVersion = $clean.Split('-')[0] # Chrome manifest versions contain digits and dots only.
 
 # NOTE: keep this script ASCII-only. Windows PowerShell 5.1 decodes .ps1 files as
 # ANSI unless they carry a BOM, so any non-ASCII literal here (e.g. a Chinese README
@@ -111,7 +112,7 @@ try {
             File        = 'browser-extension/manifest.json'
             Description = 'Chrome extension version'
             Pattern     = '(?m)^  "version": "[^"]+"(?=,?\r?$)'
-            Replace     = "  `"version`": `"$clean`""
+            Replace     = "  `"version`": `"$extensionVersion`""
         },
         @{
             File        = 'README.md'

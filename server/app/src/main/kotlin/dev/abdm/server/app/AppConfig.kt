@@ -38,10 +38,6 @@ data class AppConfig(
             fun value(vararg keys: String): String? =
                 keys.firstNotNullOfOrNull { env[it]?.takeIf { v -> v.isNotBlank() } }
 
-            require(value("ABDM_ENGINE")?.lowercase() in listOf(null, "abdm")) {
-                "ABDM_ENGINE only accepts 'abdm'; the native engine has been removed."
-            }
-
             val defaultConfigDir = if (isWindows()) "config" else "/config"
             val defaultDownloadRoot = if (isWindows()) "downloads" else "/downloads"
 
