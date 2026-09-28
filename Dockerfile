@@ -3,11 +3,11 @@
 # abdm-server — reproducible multi-stage image
 #
 #   Stage 1  web      node:22-alpine            -> /web/dist (Vue 3 + Vite)
-#   Stage 2  builder  gradle:8.13-jdk17         -> abdm-server-0.1.0-all.jar
+#   Stage 2  builder  gradle:8.13-jdk17         -> abdm-server-<version>-all.jar
 #   Stage 3  runtime  eclipse-temurin:17-jre-jammy -> the published image
 #
 # Build:
-#   docker build -t abdm-server:0.1.0 .
+#   docker build -t abdm-server:local .
 #
 # The default image uses the pinned AB Download Manager v1.10.4 bridge.
 # Run scripts/build-abdm-bridge.sh before docker build. The exported JVM 17

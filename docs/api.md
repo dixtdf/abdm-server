@@ -110,7 +110,7 @@ segment has been fetched, so the UI shows `Unknown`).
 
 | Method | Path | Body | Result |
 | --- | --- | --- | --- |
-| GET | `/api/v1/health` | – | `{ "status": "ok", "uptimeSeconds": 42, "version": "0.1.0", "engine": "abdm" }` |
+| GET | `/api/v1/health` | – | `{ "status": "ok", "uptimeSeconds": 42, "version": "<server-version>", "engine": "abdm" }` |
 | GET | `/api/v1/version` | – | `{ "version", "apiVersion", "engine", "engineVersion", "abdmVersion", "abdmCommit", "java", "os", "startedAt" }` |
 | GET | `/api/v1/settings` | – | `Settings` |
 | PUT | `/api/v1/settings` | partial `Settings` | `Settings` |
@@ -181,7 +181,7 @@ settings: `ui.locale` and `ui.theme`.
 First frame after connect:
 
 ```json
-{ "type": "hello", "server": { "version": "0.1.0", "engine": "abdm", "apiVersion": "v1" }, "tasks": [ /* Task[] */ ] }
+{ "type": "hello", "server": { "version": "<server-version>", "engine": "abdm", "apiVersion": "v1" }, "tasks": [ /* Task[] */ ] }
 ```
 
 Every subsequent frame:

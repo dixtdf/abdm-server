@@ -3,7 +3,7 @@
 #
 # Create a .env next to this file (compose reads it for interpolation):
 #   IMAGE_OWNER=dixtdf              # or your own fork
-#   IMAGE_TAG=latest                 # or edge, 0.1.0, ...
+#   IMAGE_TAG=latest                 # or a release version
 #   DOWNLOAD_HOST_PATH=/mnt/downloads
 #   AUTH_MODE=none                   # none | token
 #   AUTH_TOKEN=                      # only when AUTH_MODE=token

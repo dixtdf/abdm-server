@@ -80,6 +80,11 @@ try {
     if ($DryRun) { Write-Host '(dry run: nothing will be written)' -ForegroundColor Yellow }
     Write-Host ''
 
+    $catalogPath = Join-Path $root 'gradle/libs.versions.toml'
+    $catalogVersion = [regex]::Match([IO.File]::ReadAllText($catalogPath), '(?m)^project[ \t]*=[ \t]*"(?<version>[^"]+)"')
+    if (-not $catalogVersion.Success) { throw 'could not read the current project version' }
+    $previousVersion = $catalogVersion.Groups['version'].Value
+
     # -------------------------------------------------------------------- rules
     # Every rule must match exactly once: if a declaration moves or disappears the
     # script fails loudly instead of silently skipping it.
@@ -99,19 +104,19 @@ try {
         @{
             File        = 'server/engine-api/src/main/kotlin/dev/abdm/server/engine/api/DownloadEngine.kt'
             Description = 'Engine descriptor fallback version'
-            Pattern     = '(?m)^        \?: "[^"]*"$'
+            Pattern     = '(?m)^        \?: "[^"\r\n]*"(?=\r?$)'
             Replace     = "        ?: `"$clean`""
         },
         @{
             File        = 'README.md'
             Description = 'README version line (zh) - pattern stays ASCII on purpose'
-            Pattern     = '(?m)^(-[^\r\n]*`)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?([^\r\n]*)$'
+            Pattern     = '(?m)^(-[^\r\n]*`)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?([^\r\n]*)(?=\r?$)'
             Replace     = '${1}' + $clean + '${2}'
         },
         @{
             File        = 'README_en.md'
             Description = 'README version line (en)'
-            Pattern     = '(?m)^(-[^\r\n]*`)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?([^\r\n]*)$'
+            Pattern     = '(?m)^(-[^\r\n]*`)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?([^\r\n]*)(?=\r?$)'
             Replace     = '${1}' + $clean + '${2}'
         }
     )
@@ -125,6 +130,15 @@ try {
         if ($matches.Count -ne 1) {
             throw "$($rule.File): the version declaration matched $($matches.Count) time(s), expected exactly 1 - update the rule in this script."
         }
+        $updatedText = [regex]::Replace($text, $rule.Pattern, $rule.Replace)
+        if ($rule.File -in @('README.md', 'README_en.md')) {
+            # Update project examples only. An upstream version may happen to equal
+            # the server version, and the pinned upstream reference must stay intact.
+            $projectExamplePattern = 'IMAGE_TAG=|"version":"|`version`|ghcr\.io/|tag: v|git push origin v|project\.version=|--print-version|set-version\.ps1'
+            $updatedText = (([regex]::Split($updatedText, '(?<=\n)') | ForEach-Object {
+                if ([regex]::IsMatch($_, $projectExamplePattern)) { $_.Replace($previousVersion, $clean) } else { $_ }
+            }) -join '')
+        }
         $plan += [pscustomobject]@{
             File        = $rule.File
             Description = $rule.Description
@@ -133,7 +147,8 @@ try {
             New         = [regex]::Replace($matches[0].Value, $rule.Pattern, $rule.Replace).Trim()
             Pattern     = $rule.Pattern
             Path        = $path
-            Text        = [regex]::Replace($text, $rule.Pattern, $rule.Replace)
+            OriginalText = $text
+            Text        = $updatedText
         }
     }
 
@@ -151,6 +166,7 @@ try {
         New         = $clean
         Pattern     = $null
         Path        = $null
+        OriginalText = $null
         Text        = $null
     }
 
@@ -158,7 +174,9 @@ try {
     $changed = 0
     $touched = @()
     foreach ($item in $plan) {
-        $isChange = $item.Old -ne $item.New
+        $isChange = if ($item.Path) { $item.OriginalText -ne $item.Text } else {
+            $item.Old -ne $item.New -or $lockVersions -ne "$clean / $clean"
+        }
         if ($isChange) { $changed++ }
         Write-Host ("  [{0,-9}] {1}" -f ($(if ($isChange) { 'update' } else { 'unchanged' }), $item.File)) -ForegroundColor $(if ($isChange) { 'Green' } else { 'DarkGray' })
         Write-Host ("              {0}" -f $item.Description) -ForegroundColor DarkGray
@@ -196,7 +214,9 @@ try {
     }
     Write-Host "version is now $clean ($changed group(s) changed)" -ForegroundColor Cyan
 
-    $leftovers = & git grep -n -E '0\.1\.0' -- . ':(exclude)web/package-lock.json' 2>$null
+    $leftovers = if ($previousVersion -ne $clean) {
+        & git grep -n -F $previousVersion -- . ':(exclude)web/package-lock.json' 2>$null
+    }
     if ($leftovers) {
         Write-Host ''
         Write-Host 'these lines still mention the old version (examples in docs, not declarations):' -ForegroundColor DarkYellow

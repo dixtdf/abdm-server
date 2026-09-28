@@ -6,7 +6,7 @@ A self-hosted download manager: one JVM process that serves both the REST/WebSoc
 and a bundled web UI. It is built for LAN-first deployments and uses pinned AB Download
 Manager v1.10.4 as its only download engine.
 
-- Version: `0.2.0`
+- Version: `1.0.0`
 - Repository: <https://github.com/dixtdf/abdm-server>
 - License: [Apache-2.0](LICENSE)
 - Upstream engine: [AB Download Manager](https://github.com/amir1376/ab-download-manager)
@@ -85,7 +85,7 @@ Manager v1.10.4 as its only download engine.
 
    ```dotenv
    IMAGE_OWNER=dixtdf        # or your own fork
-   IMAGE_TAG=latest          # or edge / 0.1.0
+   IMAGE_TAG=latest          # or edge / 1.0.0
    DOWNLOAD_HOST_PATH=/mnt/downloads
    AUTH_MODE=none            # or token
    AUTH_TOKEN=               # required when AUTH_MODE=token
@@ -109,7 +109,7 @@ Manager v1.10.4 as its only download engine.
 
    ```bash
    curl -fsS http://127.0.0.1:6868/api/v1/health
-   # {"status":"ok","uptimeSeconds":3,"version":"0.2.0","engine":"abdm"}
+   # {"status":"ok","uptimeSeconds":3,"version":"1.0.0","engine":"abdm"}
    ```
 
 4. Open `http://<LAN IP>:6868`.
@@ -359,7 +359,7 @@ Release.
 
 | Input | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `version` | yes | – | Semantic version such as `0.2.0` (a leading `v` is accepted) |
+| `version` | yes | – | Semantic version such as `1.0.0` (a leading `v` is accepted) |
 | `ref` | yes | `main` | Branch, tag or commit to build and tag |
 | `prerelease` | no | `false` | Mark the GitHub Release as a pre-release |
 | `push_latest` | no | `true` | Also move the `:latest` image tag |
@@ -376,10 +376,10 @@ Release.
 Produced artifacts:
 
 ```text
-ghcr.io/dixtdf/abdm-server:0.2.0     # version
+ghcr.io/dixtdf/abdm-server:1.0.0     # version
 ghcr.io/dixtdf/abdm-server:0.2       # major.minor
 ghcr.io/dixtdf/abdm-server:latest    # when push_latest=true
-tag: v0.2.0 (on the commit ref points at)
+tag: v1.0.0 (on the commit ref points at)
 ```
 
 Two notes:
@@ -387,15 +387,15 @@ Two notes:
 1. The tag is created **last**, so a failed verification or image build never leaves a tag
    behind.
 2. This workflow owns both the image and the release; there is no "release on tag push"
-   workflow any more, so pushing `v0.2.0` by hand only creates a tag - no image, no
+   workflow any more, so pushing `v1.0.0` by hand only creates a tag - no image, no
    release. A tag pushed with `GITHUB_TOKEN` does not trigger other workflows, which is
    why this workflow also creates the release itself.
 
 To reproduce the version stamping locally:
 
 ```bash
-./gradlew -Pproject.version=0.2.0 :server:app:fatJar
-java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 0.2.0
+./gradlew -Pproject.version=1.0.0 :server:app:fatJar
+java -jar server/app/build/libs/abdm-server-*-all.jar --print-version   # -> 1.0.0
 ```
 
 Bump the version (one command updates the Gradle catalog, the frontend
@@ -404,10 +404,10 @@ READMEs; everything else derives from those):
 
 ```powershell
 # show what would change, write nothing
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 0.2.0 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 1.0.0 -DryRun
 
 # apply, optionally commit / tag / push
-powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v0.2.0 -Commit -Tag
+powershell -ExecutionPolicy Bypass -File scripts/set-version.ps1 v1.0.0 -Commit -Tag
 ```
 
 ---
